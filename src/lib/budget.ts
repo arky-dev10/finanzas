@@ -1,9 +1,7 @@
-/**
- * Tope de gasto mensual por defecto, en soles.
- * Es el "no quiero pasarme de esto" de todo el mes, aparte de los presupuestos
- * por categoría. Se puede cambiar desde Ajustes; 0 lo desactiva.
+/*
+ * No hay tope por defecto a propósito: el monto lo elige el usuario en la
+ * pantalla de bienvenida, y se cambia después desde Ajustes. 0 = sin tope.
  */
-export const DEFAULT_MONTHLY_BUDGET = 3500
 
 /** Estado de un presupuesto. El icono acompaña al color: nunca color solo. */
 export type BudgetState = {

@@ -10,11 +10,14 @@ import { AddTransaction } from '@/pages/AddTransaction'
 import { Categories } from '@/pages/Categories'
 import { History } from '@/pages/History'
 import { Settings } from '@/pages/Settings'
+import { Welcome } from '@/pages/Welcome'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
+        {/* Fuera del layout: pantalla completa, sin barra inferior. */}
+        <Route path="/bienvenida" element={<Welcome />} />
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/registrar" element={<AddTransaction />} />

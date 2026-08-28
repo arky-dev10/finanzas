@@ -1,4 +1,3 @@
-import { DEFAULT_MONTHLY_BUDGET } from '@/lib/budget'
 import type { Category, Transaction } from '@/types'
 
 /** v2 agregó `monthlyBudget`. Los respaldos v1 se siguen importando. */
@@ -17,6 +16,12 @@ export interface Data {
   transactions: Transaction[]
   /** Tope de gasto de todo el mes. 0 = sin tope. */
   monthlyBudget: number
+  /**
+   * Si ya pasó por la pantalla de bienvenida. No va en el respaldo: es estado
+   * de la app, no plata. Sin esto, quien elige "Definirlo después" volvería a
+   * ver la bienvenida en cada arranque.
+   */
+  onboarded: boolean
 }
 
 function isCategory(v: unknown): v is Category {
@@ -64,8 +69,11 @@ export function parseData(raw: unknown): Data | null {
   return {
     categories: o.categories,
     transactions: o.transactions,
-    // Los respaldos v1 no lo traían: cae al tope por defecto.
-    monthlyBudget: isBudget(o.monthlyBudget) ? o.monthlyBudget : DEFAULT_MONTHLY_BUDGET,
+    // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
+    // No inventamos un monto que el usuario no eligió.
+    monthlyBudget: isBudget(o.monthlyBudget) ? o.monthlyBudget : 0,
+    // Tener datos guardados (o importar un respaldo) significa que no sos nuevo.
+    onboarded: typeof o.onboarded === 'boolean' ? o.onboarded : true,
   }
 }
 

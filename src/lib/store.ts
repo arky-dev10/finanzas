@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from 'react'
-import { DEFAULT_MONTHLY_BUDGET } from '@/lib/budget'
 import { monthKey, shiftMonth } from '@/lib/format'
 import { parseData, type Data } from '@/lib/backup'
 import type { Category, Transaction, TxType } from '@/types'
@@ -44,7 +43,8 @@ function initial(): Data {
   return {
     categories: DEFAULT_CATEGORIES,
     transactions: [],
-    monthlyBudget: DEFAULT_MONTHLY_BUDGET,
+    monthlyBudget: 0,
+    onboarded: false,
   }
 }
 
@@ -82,7 +82,11 @@ export function useData(): Data {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-/** Vuelve a las categorías por defecto y borra todos los movimientos. Devuelve lo anterior. */
+/**
+ * Vuelve a las categorías por defecto y borra todos los movimientos.
+ * Deja `onboarded` en false a propósito: "empezar de cero" te devuelve a la
+ * bienvenida, y el "Deshacer" del toast restaura el flag y te trae de vuelta.
+ */
 export function resetData(): Data {
   const previo = data
   commit(initial())
@@ -96,6 +100,7 @@ export function replaceData(next: Data): Data {
     categories: next.categories,
     transactions: next.transactions,
     monthlyBudget: next.monthlyBudget,
+    onboarded: next.onboarded,
   })
   return previo
 }
@@ -174,6 +179,11 @@ export function restoreCategory(category: Category, transactions: Transaction[])
 /** Cambia el tope de gasto de todo el mes. 0 lo desactiva. */
 export function setMonthlyBudget(amount: number) {
   commit({ ...data, monthlyBudget: Math.max(0, amount) })
+}
+
+/** Cierra la bienvenida. `amount` en 0 = "definirlo después". */
+export function completeOnboarding(amount: number) {
+  commit({ ...data, monthlyBudget: Math.max(0, amount), onboarded: true })
 }
 
 /* ---------- selectores ---------- */

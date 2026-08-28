@@ -33,9 +33,13 @@ Comparar meses y explorar la dona son *navegación*, y viven en **Historial**.
 
 Conviven dos cosas distintas y no hay que confundirlas:
 
-- **Tope mensual global** (`Data.monthlyBudget`, por defecto **3500**): el "no quiero gastar
-  más de esto en el mes". Se edita en **Ajustes**, `0` lo desactiva. Es el bloque
-  "Presupuesto del mes" al pie de la tarjeta de balance.
+- **Tope mensual global** (`Data.monthlyBudget`): el "no quiero gastar más de esto en el
+  mes". **No tiene valor por defecto**: lo elige el usuario en la bienvenida y se edita en
+  **Ajustes**; `0` lo desactiva. Es el bloque "Presupuesto del mes" al pie de la tarjeta de
+  balance.
+
+  > Antes arrancaba en 3500 hardcodeado y el Resumen mostraba "64% del presupuesto" contra
+  > un número que nadie había elegido. Ver **Bienvenida** más abajo.
 - **Presupuesto por categoría** (`Category.budget`, opcional): se edita en **Categorías** y
   solo asoma en el Resumen cuando esa categoría llegó al 90%.
 
@@ -131,7 +135,8 @@ interface Transaction {
 interface Data {
   categories: Category[]
   transactions: Transaction[]
-  monthlyBudget: number   // tope de todo el mes; 0 = sin tope
+  monthlyBudget: number   // tope de todo el mes; 0 = sin tope, sin valor por defecto
+  onboarded: boolean      // si ya pasó por la bienvenida; NO va en el respaldo
 }
 ```
 
@@ -149,6 +154,46 @@ interface Data {
   `budgetStatus` (por categoría), `balanceTrend`, `getCategory`, `getTransaction`.
 - El respaldo va por **`BACKUP_VERSION = 2`** (agregó `monthlyBudget`). Los archivos v1
   se siguen importando: si no traen el campo, cae en `DEFAULT_MONTHLY_BUDGET`.
+
+---
+
+## Bienvenida (y por qué existe)
+
+`Welcome.tsx`, ruta `/bienvenida`, **fuera** del `AppLayout` (pantalla completa, sin barra
+inferior). Un solo paso: el tope mensual, con "Definirlo después" como salida.
+
+Existe para **no inventar un número**. El tope arrancaba en `DEFAULT_MONTHLY_BUDGET = 3500`,
+así que el Resumen decía "64% · quedan S/ 1,252 de S/ 3,500" desde el día uno contra un monto
+que el usuario nunca eligió. La constante ya no existe.
+
+**El guard vive en `AppLayout`**: `if (!onboarded) return <Navigate to="/bienvenida" />`.
+Como todas las rutas reales cuelgan del layout, no hay forma de esquivarlo. `Welcome` hace
+el redirect inverso si `onboarded` ya es true.
+
+### Migración: quién ve la bienvenida y quién no
+
+La regla está en `parseData` (`lib/backup.ts`): **`onboarded` ausente ⇒ `true`**. Tener datos
+guardados, o importar un respaldo, significa que no sos nuevo.
+
+| Situación | Qué pasa |
+|---|---|
+| Ya venía usando la app (tiene `monthlyBudget: 3500` guardado) | No ve la bienvenida, **conserva su 3500** |
+| Ya venía usando la app y había puesto el tope en 0 | No ve la bienvenida (no se le re-pregunta algo que ya decidió) |
+| localStorage vacío | Bienvenida |
+| localStorage corrupto | Bienvenida (`parseData` devuelve `null` → `initial()`) |
+| Importa un respaldo v1 o v2 | Sin tope hasta definirlo; no se inventa un monto |
+
+Verificado en el build de producción sembrando cada caso en `localStorage`.
+
+`onboarded` **no va en el respaldo**: `toBackup` lo omite a propósito porque es estado de la
+app, no plata. Por eso `BACKUP_VERSION` sigue en 2.
+
+`resetData()` sí lo pone en `false`: "Borrar todo y empezar de cero" te devuelve a la
+bienvenida, y el "Deshacer" del toast restaura el flag y te trae de vuelta al Resumen.
+
+> Fricción conocida: quien reinstala la app y quiere restaurar un respaldo tiene que pasar
+> por "Definirlo después" antes de llegar a Ajustes → Importar. El resultado final es
+> correcto (el respaldo pisa el tope), pero son dos toques de más.
 
 ---
 
@@ -220,6 +265,7 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 - [x] Editar movimientos · "Deshacer" al borrar movimiento o categoría
 - [x] Respaldo JSON: exportar (Web Share o descarga), copiar, importar con validación
 - [x] PWA de verdad: instalable, offline, con ícono propio (ver abajo)
+- [x] Bienvenida de un paso: el tope mensual lo elige el usuario, no la app
 - [x] Verificado en navegador a 390×844 y 1280×900 con datos sembrados
       (los 3 estados del tope: 60% en rango, 89% casi al límite, 107% pasado)
 
