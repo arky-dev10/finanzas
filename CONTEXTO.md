@@ -54,11 +54,13 @@ pasaste, la barra se llena al 100% y el exceso se dice con el monto:
 - **Vite 8** + **React 19** (TypeScript, `tsc` 6)
 - **Tailwind CSS v4** (vía `@tailwindcss/vite`) · **shadcn/ui** (estilo `base-nova`)
 - **lucide-react** (iconos) · **react-router-dom** · **sonner** (toasts con "Deshacer")
-- **vite-plugin-pwa** — service worker + manifest (`generateSW`, `autoUpdate`)
+- **vite-plugin-pwa** — service worker + manifest (`generateSW`, modo `prompt`)
+- **sharp** (solo dev) — genera íconos y splashes desde `scripts/`
 
 ```bash
 npm run dev       # desarrollo (PWA activa en dev)
 npm run build     # tsc -b && vite build + genera sw.js / manifest
+npm run icons     # regenera íconos y splashes (solo si cambia la marca)
 npm run preview   # sirve el build para probar la PWA instalable
 npm run lint      # oxlint
 ```
@@ -73,6 +75,7 @@ src/
 ├── index.css                # Tailwind + tokens shadcn + .surface + marco mobile
 ├── types.ts                 # Category (con budget?), Transaction, TxType
 ├── lib/
+│   ├── pwa.ts               # useInstall(): prompt de instalación + detección standalone
 │   ├── format.ts            # dinero, meses, shiftMonth, sanitizeAmount
 │   ├── budget.ts            # estado de presupuesto (color + texto + icono) + tope por defecto
 │   ├── backup.ts            # serializar / validar JSON importado
@@ -81,6 +84,7 @@ src/
 │   └── store.ts             # store local (useSyncExternalStore) + acciones
 ├── components/
 │   ├── AppLayout.tsx        # Shell: <Outlet/> + BottomNav
+│   ├── PwaUpdater.tsx       # Registra el SW y avisa "hay versión nueva"
 │   ├── BottomNav.tsx        # Barra de 4 items + FAB flotante abajo a la derecha
 │   ├── MonthNav.tsx         # ‹ mes › (tocar el mes vuelve al actual)
 │   ├── CategoryIcon.tsx     # Icono en cuadro con el color de la categoría
@@ -94,7 +98,10 @@ src/
     ├── AddTransaction.tsx   # Registrar y editar (/registrar y /registrar/:id)
     ├── Categories.tsx       # Categorías + presupuestos + colores/iconos
     ├── History.tsx          # Barras de meses + dona + lista del mes
-    └── Settings.tsx         # Presupuesto mensual + respaldo JSON (exportar / copiar / importar)
+    └── Settings.tsx         # Instalar app + presupuesto mensual + respaldo JSON
+scripts/
+├── apple-splash.ts          # Lista de pantallas iOS (la usan el generador y vite.config)
+└── generate-icons.ts        # Marca "S/" → íconos, maskable, apple-touch, splashes
 ```
 
 ### Modelo de datos
@@ -145,6 +152,47 @@ interface Data {
 
 ---
 
+## PWA
+
+La app es instalable de verdad, no un acceso directo. Verificado en build de
+producción: Chrome dispara `beforeinstallprompt` (solo lo hace si se cumplen
+**todos** los criterios), y matando el servidor `/historial` sigue cargando.
+
+**La marca vive en código**, no en un SVG suelto: `scripts/generate-icons.ts`
+dibuja la "S/" con dos arcos y una recta (sin fuentes, así que el render es
+igual en cualquier máquina) y de ahí salen todos los tamaños. Correr
+`npm run icons` solo si cambia la marca; los PNG van commiteados.
+
+Cada variante existe por un motivo concreto:
+
+| Archivo | Por qué |
+|---|---|
+| `pwa-64/192/512` | Ícono normal, con esquinas redondeadas propias |
+| `maskable-icon-512` | Cuadrado a sangre, marca al 62%: Android recorta en círculo y le comería un pedazo |
+| `apple-touch-icon-180` | Sin redondear: iOS aplica su propia máscara y quedaría doble |
+| `apple-splash-*` (14) | Sin esto, abrir desde la pantalla de inicio en iOS muestra un rectángulo blanco |
+| `screenshots/*` | Sin ellas Chrome usa el diálogo de instalación mínimo en vez de la ficha rica |
+
+**Actualizaciones: `prompt`, no `autoUpdate`.** Recargar en silencio a mitad de
+"Registrar movimiento" te borra lo escrito. `PwaUpdater` avisa por toast y el
+usuario decide cuándo; además rechequea cada hora si la app queda abierta.
+
+**Instalar** vive en Ajustes y se esconde sola una vez instalada. Chromium abre
+el diálogo nativo; Safari en iOS no tiene API para eso, así que ahí van las
+instrucciones de Compartir → Añadir a pantalla de inicio.
+
+Detalles que se sienten pero no se ven: `overscroll-behavior` (el gesto de
+recargar de Android reiniciaba la app), `touch-action: manipulation` (mata el
+delay de 300ms), `-webkit-tap-highlight-color: transparent`, `launch_handler`
+(el atajo va a la ventana abierta) e `id` en el manifest (sin él, cambiar
+`start_url` mañana crearía una instalación nueva).
+
+> `color-scheme` pasó de `light dark` a `light`: la app todavía no tiene tema
+> oscuro, y anunciar que lo soporta pintaba los inputs oscuros en un celular en
+> modo noche mientras el resto seguía claro.
+
+---
+
 ## Paleta de categorías
 
 Los colores por defecto están **validados con el validador de dataviz** (pares adyacentes,
@@ -171,7 +219,7 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 - [x] Presupuestos por categoría con alerta al 90% y al pasarse
 - [x] Editar movimientos · "Deshacer" al borrar movimiento o categoría
 - [x] Respaldo JSON: exportar (Web Share o descarga), copiar, importar con validación
-- [x] PWA verificada en build de producción (SW activo, manifest `lang: es`)
+- [x] PWA de verdad: instalable, offline, con ícono propio (ver abajo)
 - [x] Verificado en navegador a 390×844 y 1280×900 con datos sembrados
       (los 3 estados del tope: 60% en rango, 89% casi al límite, 107% pasado)
 

@@ -6,7 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -148,6 +148,7 @@ body {
 body {
   background: #e2e8f0;
 }
+
 #root {
   max-width: 480px;
   margin: 0 auto;
@@ -171,4 +172,34 @@ body {
 }
 .pt-nav {
   padding-top: calc(env(safe-area-inset-top) + 0.5rem);
+}
+
+/* --- Sensación de app instalada --- */
+
+/* Instalada en Android, el "deslizar para recargar" reinicia la app entera.
+   `contain` deja el scroll normal pero corta ese gesto. */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
+
+body {
+  /* El recuadro gris al tocar delata que es una web. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Sin esto el navegador espera ~300ms por si viene un doble-tap de zoom. */
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* Mantener pulsado un botón no debe ofrecer "copiar"; los montos y las notas
+   sí siguen siendo seleccionables. */
+button,
+nav,
+label {
+  user-select: none;
+  -webkit-user-select: none;
 }

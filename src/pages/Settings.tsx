@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
-import { Copy, Download, RotateCcw, Share2, Upload } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Copy, Download, RotateCcw, Share, Share2, Smartphone, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
 import { formatMoney, monthLabelCap, sanitizeAmount } from '@/lib/format'
+import { useInstall } from '@/lib/pwa'
 import { replaceData, resetData, setMonthlyBudget, useData } from '@/lib/store'
 
 /** En navegadores sin Web Share (escritorio) el respaldo baja como archivo. */
@@ -89,6 +90,8 @@ export function Settings() {
     <div className="flex flex-col gap-4 px-4 pb-4 pt-nav">
       <h1 className="px-1 text-lg font-semibold">Ajustes</h1>
 
+      <InstalarApp />
+
       {/* `key` para que el input se re-sincronice tras importar o empezar de cero. */}
       <PresupuestoMensual key={data.monthlyBudget} actual={data.monthlyBudget} />
 
@@ -169,6 +172,65 @@ export function Settings() {
         </Button>
       </section>
     </div>
+  )
+}
+
+/**
+ * Se esconde sola una vez instalada. Chromium da un diálogo nativo; Safari en
+ * iOS no tiene API para esto, así que ahí lo único posible son instrucciones.
+ */
+function InstalarApp() {
+  const { canInstall, installed, install, isIOS } = useInstall()
+  if (installed) return null
+
+  async function instalar() {
+    const acepto = await install()
+    if (acepto) toast.success('Finanzas quedó en tu pantalla de inicio')
+  }
+
+  return (
+    <section className="surface flex flex-col gap-3 p-5">
+      <h2 className="text-base font-semibold">Instalar la app</h2>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Queda con su propio ícono en la pantalla de inicio, abre a pantalla completa
+        (sin barra del navegador) y sigue funcionando sin internet.
+      </p>
+
+      {canInstall ? (
+        <Button onClick={() => void instalar()} className="h-11 justify-start gap-2">
+          <Smartphone size={17} />
+          Instalar en este dispositivo
+        </Button>
+      ) : isIOS ? (
+        <ol className="flex flex-col gap-2 text-xs leading-relaxed text-muted-foreground">
+          <PasoInstalacion n={1}>
+            Toca <Share size={13} className="inline align-[-2px]" />{' '}
+            <b className="font-semibold text-foreground">Compartir</b>, abajo en Safari.
+          </PasoInstalacion>
+          <PasoInstalacion n={2}>
+            Baja y elige{' '}
+            <b className="font-semibold text-foreground">Añadir a pantalla de inicio</b>.
+          </PasoInstalacion>
+        </ol>
+      ) : (
+        <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+          Abre el menú de tu navegador y busca{' '}
+          <b className="font-semibold text-foreground">Instalar Finanzas</b>. Si no
+          aparece, tu navegador no soporta instalar apps: probá con Chrome o Edge.
+        </p>
+      )}
+    </section>
+  )
+}
+
+function PasoInstalacion({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground">
+        {n}
+      </span>
+      <span>{children}</span>
+    </li>
   )
 }
 

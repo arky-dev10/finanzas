@@ -1,15 +1,30 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-PE">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="description" content="Control de gastos e ingresos por categoría, en soles y sin conexión." />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <!-- Igual que --page en index.css: así la barra de estado de Android se
+         funde con la app en vez de marcar una franja blanca. -->
+    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="Control de gastos e ingresos por categoría, en soles y sin conexión."
+    />
+
+    <!-- Instalada a pantalla completa. `apple-` está deprecado pero sigue
+         siendo el único que lee Safari. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Finanzas" />
-    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
+    <!-- Los <link rel="apple-touch-startup-image"> los inyecta vite.config.ts -->
+
     <title>Finanzas</title>
   </head>
   <body>
