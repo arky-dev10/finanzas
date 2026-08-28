@@ -1,0 +1,39 @@
+- generic [ref=f5e2]:
+  - generic [ref=f5e3]:
+    - generic [ref=f5e5]:
+      - heading "Ajustes" [level=1] [ref=f5e6]
+      - generic [ref=f5e7]:
+        - heading "Tus datos" [level=2] [ref=f5e8]
+        - generic [ref=f5e9]:
+          - generic [ref=f5e10]:
+            - term [ref=f5e11]: Movimientos
+            - definition [ref=f5e12]: "28"
+          - generic [ref=f5e13]:
+            - term [ref=f5e14]: Categorías
+            - definition [ref=f5e15]: "10"
+          - generic [ref=f5e16]:
+            - term [ref=f5e17]: Gasto acumulado
+            - definition [ref=f5e18]: S/ 8,815.00
+          - generic [ref=f5e19]:
+            - term [ref=f5e20]: Meses con datos
+            - definition [ref=f5e21]: 3 (desde junio 2026)
+        - paragraph [ref=f5e22]: Todo se guarda solo en este dispositivo. Si limpias los datos del navegador o cambias de celular, se pierde. Exporta cada tanto.
+      - generic [ref=f5e23]:
+        - heading "Respaldo" [level=2] [ref=f5e24]
+        - button "Exportar a JSON" [ref=f5e25]
+        - button "Copiar JSON al portapapeles" [ref=f5e26]
+        - generic [ref=f5e27]:
+          - button "Importar desde JSON" [ref=f5e28]
+          - paragraph [ref=f5e29]: Reemplaza todo lo que tienes ahora. Podrás deshacerlo desde el aviso que aparece después.
+    - button "Registrar movimiento" [ref=f5e30]
+    - navigation [ref=f5e32]:
+      - generic [ref=f5e33]:
+        - link "Resumen" [ref=f5e34] [cursor=pointer]:
+          - /url: /
+        - link "Historial" [ref=f5e40] [cursor=pointer]:
+          - /url: /historial
+        - link "Categorías" [ref=f5e42] [cursor=pointer]:
+          - /url: /categorias
+        - link "Ajustes" [ref=f5e47] [cursor=pointer]:
+          - /url: /ajustes
+  - region "Notifications alt+T"

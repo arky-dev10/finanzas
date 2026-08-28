@@ -1,0 +1,196 @@
+- generic [ref=f2e2]:
+  - generic [ref=f2e3]:
+    - generic [ref=f2e5]:
+      - generic [ref=f2e6]:
+        - button "Mes anterior" [ref=f2e7]
+        - button "julio 2026" [ref=f2e371]
+        - button "Mes siguiente" [ref=f2e11]
+      - generic [ref=f2e15]:
+        - generic [ref=f2e16]: Balance del mes
+        - generic [ref=f2e17]: S/ 1,160.00
+        - generic [ref=f2e18]:
+          - generic [ref=f2e19]:
+            - generic [ref=f2e23]: Ingresos
+            - generic [ref=f2e24]: S/ 4,200.00
+          - generic [ref=f2e25]:
+            - generic [ref=f2e29]: Gastos
+            - generic [ref=f2e30]: S/ 3,040.00
+      - generic [ref=f2e31]:
+        - heading "Gastos por categoría" [level=3] [ref=f2e33]
+        - generic [ref=f2e34]:
+          - generic [ref=f2e36]:
+            - img "Gastos por categoría" [ref=f2e37]:
+              - generic [ref=f2e38]:
+                - generic [ref=f2e40] [cursor=pointer]
+                - generic [ref=f2e41] [cursor=pointer]
+                - generic [ref=f2e372] [cursor=pointer]
+                - generic [ref=f2e42] [cursor=pointer]
+                - generic [ref=f2e44] [cursor=pointer]
+                - generic [ref=f2e43] [cursor=pointer]
+            - generic:
+              - generic: Gastos
+              - generic: S/ 3,040.00
+          - generic [ref=f2e46]:
+            - button "Vivienda S/ 1,200.0039%" [ref=f2e373]:
+              - generic [ref=f2e53]:
+                - generic [ref=f2e54]: Vivienda
+                - generic [ref=f2e55]:
+                  - text: S/ 1,200.00
+                  - generic [ref=f2e56]: 39%
+            - button "Comida S/ 720.0024%" [ref=f2e374]:
+              - generic [ref=f2e65]:
+                - generic [ref=f2e66]: Comida
+                - generic [ref=f2e67]:
+                  - text: S/ 720.00
+                  - generic [ref=f2e68]: 24%
+            - button "Ocio S/ 410.0013%" [ref=f2e375]:
+              - generic [ref=f2e380]:
+                - generic [ref=f2e381]: Ocio
+                - generic [ref=f2e382]:
+                  - text: S/ 410.00
+                  - generic [ref=f2e383]: 13%
+            - button "Servicios S/ 300.0010%" [ref=f2e386]:
+              - generic [ref=f2e76]:
+                - generic [ref=f2e77]: Servicios
+                - generic [ref=f2e78]:
+                  - text: S/ 300.00
+                  - generic [ref=f2e79]: 10%
+            - button "Transporte S/ 260.009%" [ref=f2e387]:
+              - generic [ref=f2e101]:
+                - generic [ref=f2e102]: Transporte
+                - generic [ref=f2e103]:
+                  - text: S/ 260.00
+                  - generic [ref=f2e104]: 9%
+            - button "Compras S/ 150.005%" [ref=f2e388]:
+              - generic [ref=f2e88]:
+                - generic [ref=f2e89]: Compras
+                - generic [ref=f2e90]:
+                  - text: S/ 150.00
+                  - generic [ref=f2e91]: 5%
+      - generic [ref=f2e116]:
+        - heading "Presupuestos" [level=3] [ref=f2e118]
+        - generic [ref=f2e119]:
+          - generic [ref=f2e188]:
+            - generic [ref=f2e189]:
+              - generic [ref=f2e190]: Ocio
+              - generic [ref=f2e191]:
+                - text: S/ 410.00
+                - generic [ref=f2e192]: / S/ 250.00
+            - generic [ref=f2e195]: Te pasaste · S/ 160.00 de más
+          - generic [ref=f2e141]:
+            - generic [ref=f2e142]:
+              - generic [ref=f2e143]: Vivienda
+              - generic [ref=f2e144]:
+                - text: S/ 1,200.00
+                - generic [ref=f2e145]: / S/ 1,200.00
+            - generic [ref=f2e148]: Casi al límite · S/ 0.00 disponible
+          - generic [ref=f2e125]:
+            - generic [ref=f2e126]:
+              - generic [ref=f2e127]: Comida
+              - generic [ref=f2e128]:
+                - text: S/ 720.00
+                - generic [ref=f2e129]: / S/ 800.00
+            - generic [ref=f2e132]: Casi al límite · S/ 80.00 disponible
+          - generic [ref=f2e158]:
+            - generic [ref=f2e159]:
+              - generic [ref=f2e160]: Transporte
+              - generic [ref=f2e161]:
+                - text: S/ 260.00
+                - generic [ref=f2e162]: / S/ 300.00
+            - generic [ref=f2e165]: Casi al límite · S/ 40.00 disponible
+          - generic [ref=f2e173]:
+            - generic [ref=f2e174]:
+              - generic [ref=f2e175]: Servicios
+              - generic [ref=f2e176]:
+                - text: S/ 300.00
+                - generic [ref=f2e177]: / S/ 400.00
+            - generic [ref=f2e180]: En rango · S/ 100.00 disponible
+      - generic [ref=f2e199]:
+        - generic [ref=f2e200]:
+          - heading "Últimos 6 meses" [level=3] [ref=f2e201]
+          - generic [ref=f2e202]: Toca un mes para verlo
+        - generic [ref=f2e203]:
+          - generic [ref=f2e204]:
+            - 'button "mar: ingresos S/ 0.00, gastos S/ 0.00" [ref=f2e205]':
+              - generic [ref=f2e207]: mar
+            - 'button "abr: ingresos S/ 0.00, gastos S/ 0.00" [ref=f2e208]':
+              - generic [ref=f2e210]: abr
+            - 'button "may: ingresos S/ 0.00, gastos S/ 0.00" [ref=f2e211]':
+              - generic [ref=f2e213]: may
+            - 'button "jun: ingresos S/ 4,200.00, gastos S/ 2,530.00" [ref=f2e214]':
+              - generic [ref=f2e218]: jun
+            - 'button "jul: ingresos S/ 4,200.00, gastos S/ 3,040.00" [active] [pressed] [ref=f2e219]':
+              - generic [ref=f2e223]: jul
+            - 'button "ago: ingresos S/ 4,850.00, gastos S/ 3,305.00" [ref=f2e224]':
+              - generic [ref=f2e228]: ago
+          - generic [ref=f2e229]:
+            - generic [ref=f2e230]:
+              - text: Ingresos
+              - generic [ref=f2e232]: S/ 4.2k
+            - generic [ref=f2e233]:
+              - text: Gastos
+              - generic [ref=f2e235]: S/ 3.0k
+      - generic [ref=f2e236]:
+        - generic [ref=f2e237]:
+          - heading "Movimientos recientes" [level=3] [ref=f2e238]
+          - button "Ver todo" [ref=f2e239]
+        - generic [ref=f2e240]:
+          - generic [ref=f2e393]:
+            - button "Ocio Viaje fin de semana · 20/07 -S/ 410.00" [ref=f2e394]:
+              - generic [ref=f2e398]:
+                - generic [ref=f2e399]: Ocio
+                - generic [ref=f2e400]: Viaje fin de semana · 20/07
+              - generic [ref=f2e401]: "-S/ 410.00"
+            - button "Eliminar movimiento" [ref=f2e402]
+          - generic [ref=f2e406]:
+            - button "Compras Ropa · 14/07 -S/ 150.00" [ref=f2e407]:
+              - generic [ref=f2e412]:
+                - generic [ref=f2e413]: Compras
+                - generic [ref=f2e414]: Ropa · 14/07
+              - generic [ref=f2e415]: "-S/ 150.00"
+            - button "Eliminar movimiento" [ref=f2e416]
+          - generic [ref=f2e420]:
+            - button "Comida Mercado del mes · 10/07 -S/ 720.00" [ref=f2e421]:
+              - generic [ref=f2e426]:
+                - generic [ref=f2e427]: Comida
+                - generic [ref=f2e428]: Mercado del mes · 10/07
+              - generic [ref=f2e429]: "-S/ 720.00"
+            - button "Eliminar movimiento" [ref=f2e430]
+          - generic [ref=f2e434]:
+            - button "Transporte Combustible · 08/07 -S/ 260.00" [ref=f2e435]:
+              - generic [ref=f2e441]:
+                - generic [ref=f2e442]: Transporte
+                - generic [ref=f2e443]: Combustible · 08/07
+              - generic [ref=f2e444]: "-S/ 260.00"
+            - button "Eliminar movimiento" [ref=f2e445]
+          - generic [ref=f2e449]:
+            - button "Servicios Servicios · 05/07 -S/ 300.00" [ref=f2e450]:
+              - generic [ref=f2e454]:
+                - generic [ref=f2e455]: Servicios
+                - generic [ref=f2e456]: Servicios · 05/07
+              - generic [ref=f2e457]: "-S/ 300.00"
+            - button "Eliminar movimiento" [ref=f2e458]
+          - generic [ref=f2e462]:
+            - button "Vivienda Alquiler · 02/07 -S/ 1,200.00" [ref=f2e463]:
+              - generic [ref=f2e468]:
+                - generic [ref=f2e469]: Vivienda
+                - generic [ref=f2e470]: Alquiler · 02/07
+              - generic [ref=f2e471]: "-S/ 1,200.00"
+            - button "Eliminar movimiento" [ref=f2e472]
+          - generic [ref=f2e476]:
+            - button "Salario Sueldo julio · 01/07 +S/ 4,200.00" [ref=f2e477]:
+              - generic [ref=f2e482]:
+                - generic [ref=f2e483]: Salario
+                - generic [ref=f2e484]: Sueldo julio · 01/07
+              - generic [ref=f2e485]: +S/ 4,200.00
+            - button "Eliminar movimiento" [ref=f2e486]
+    - navigation [ref=f2e354]:
+      - generic [ref=f2e355]:
+        - link "Resumen" [ref=f2e356] [cursor=pointer]:
+          - /url: /
+        - button "Registrar movimiento" [ref=f2e362]
+        - link "Historial" [ref=f2e364] [cursor=pointer]:
+          - /url: /historial
+        - link "Categorías" [ref=f2e366] [cursor=pointer]:
+          - /url: /categorias
+  - region "Notifications alt+T"

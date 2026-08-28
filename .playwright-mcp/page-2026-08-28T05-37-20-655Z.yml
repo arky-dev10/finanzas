@@ -1,0 +1,143 @@
+- generic [ref=f6e2]:
+  - generic [ref=f6e3]:
+    - generic [ref=f6e5]:
+      - generic [ref=f6e6]:
+        - button "Mes anterior" [ref=f6e7]
+        - button "agosto 2026" [disabled] [ref=f6e10]
+        - button "Mes siguiente" [ref=f6e11]
+      - banner [ref=f6e14]:
+        - generic [ref=f6e15]:
+          - generic [ref=f6e16]: Balance del mes
+          - generic [ref=f6e17]: S/ 1,605.00
+        - generic [ref=f6e18]:
+          - generic [ref=f6e19]:
+            - generic [ref=f6e20]: Ingresos
+            - generic [ref=f6e21]: S/ 4,850.00
+          - generic [ref=f6e22]:
+            - generic [ref=f6e23]: Gastos
+            - generic [ref=f6e24]: S/ 3,245.00
+      - generic [ref=f6e25]:
+        - heading "En qué se va" [level=3] [ref=f6e27]
+        - generic [ref=f6e28]:
+          - generic [ref=f6e30]:
+            - img "Gastos por categoría" [ref=f6e31]:
+              - generic [ref=f6e32]:
+                - generic [ref=f6e34] [cursor=pointer]
+                - generic [ref=f6e35] [cursor=pointer]
+                - generic [ref=f6e36] [cursor=pointer]
+                - generic [ref=f6e37] [cursor=pointer]
+                - generic [ref=f6e38] [cursor=pointer]
+                - generic [ref=f6e39] [cursor=pointer]
+            - generic:
+              - generic: Gastos
+              - generic: S/ 3,245.00
+          - generic [ref=f6e40]:
+            - button "Vivienda S/ 1,200.0037%" [ref=f6e41]:
+              - generic [ref=f6e47]:
+                - generic [ref=f6e48]: Vivienda
+                - generic [ref=f6e49]:
+                  - text: S/ 1,200.00
+                  - generic [ref=f6e50]: 37%
+            - button "Comida S/ 875.0027%" [ref=f6e53]:
+              - generic [ref=f6e59]:
+                - generic [ref=f6e60]: Comida
+                - generic [ref=f6e61]:
+                  - text: S/ 875.00
+                  - generic [ref=f6e62]: 27%
+            - button "Servicios S/ 330.0010%" [ref=f6e65]:
+              - generic [ref=f6e70]:
+                - generic [ref=f6e71]: Servicios
+                - generic [ref=f6e72]:
+                  - text: S/ 330.00
+                  - generic [ref=f6e73]: 10%
+            - button "Compras S/ 280.009%" [ref=f6e76]:
+              - generic [ref=f6e82]:
+                - generic [ref=f6e83]: Compras
+                - generic [ref=f6e84]:
+                  - text: S/ 280.00
+                  - generic [ref=f6e85]: 9%
+            - button "Transporte S/ 270.008%" [ref=f6e88]:
+              - generic [ref=f6e95]:
+                - generic [ref=f6e96]: Transporte
+                - generic [ref=f6e97]:
+                  - text: S/ 270.00
+                  - generic [ref=f6e98]: 8%
+            - button "Otros (2) S/ 290.009%" [ref=f6e101]:
+              - generic [ref=f6e104]:
+                - generic [ref=f6e105]: Otros (2)
+                - generic [ref=f6e106]:
+                  - text: S/ 290.00
+                  - generic [ref=f6e107]: 9%
+      - generic [ref=f6e110]:
+        - heading "Requiere atención" [level=3] [ref=f6e112]
+        - generic [ref=f6e113]:
+          - generic [ref=f6e114]:
+            - generic [ref=f6e117]:
+              - generic [ref=f6e118]: Comida
+              - generic [ref=f6e119]: Te pasaste · S/ 75.00 de más
+            - generic [ref=f6e120]: 109%
+          - generic [ref=f6e121]:
+            - generic [ref=f6e124]:
+              - generic [ref=f6e125]: Vivienda
+              - generic [ref=f6e126]: Al límite · quedan S/ 0.00
+            - generic [ref=f6e127]: 100%
+          - generic [ref=f6e128]:
+            - generic [ref=f6e131]:
+              - generic [ref=f6e132]: Transporte
+              - generic [ref=f6e133]: Casi al límite · quedan S/ 30.00
+            - generic [ref=f6e134]: 90%
+          - generic [ref=f6e135]:
+            - generic [ref=f6e138]:
+              - generic [ref=f6e139]: Servicios
+              - generic [ref=f6e140]: Casi al límite · quedan S/ 70.00
+            - generic [ref=f6e141]: 83%
+      - generic [ref=f6e142]:
+        - generic [ref=f6e143]:
+          - heading "Lo último" [level=3] [ref=f6e144]
+          - button "Ver todo" [ref=f6e145]
+        - generic [ref=f6e146]:
+          - generic [ref=f6e147]:
+            - button "Comida Almuerzos · 22/08 -S/ 145.00" [ref=f6e148]:
+              - generic [ref=f6e153]:
+                - generic [ref=f6e154]: Comida
+                - generic [ref=f6e155]: Almuerzos · 22/08
+              - generic [ref=f6e156]: "-S/ 145.00"
+            - button "Eliminar movimiento" [ref=f6e157]
+          - generic [ref=f6e161]:
+            - button "Salud Farmacia · 21/08 -S/ 130.00" [ref=f6e162]:
+              - generic [ref=f6e167]:
+                - generic [ref=f6e168]: Salud
+                - generic [ref=f6e169]: Farmacia · 21/08
+              - generic [ref=f6e170]: "-S/ 130.00"
+            - button "Eliminar movimiento" [ref=f6e171]
+          - generic [ref=f6e175]:
+            - button "Transporte Combustible · 20/08 -S/ 95.00" [ref=f6e176]:
+              - generic [ref=f6e182]:
+                - generic [ref=f6e183]: Transporte
+                - generic [ref=f6e184]: Combustible · 20/08
+              - generic [ref=f6e185]: "-S/ 95.00"
+            - button "Eliminar movimiento" [ref=f6e186]
+          - generic [ref=f6e190]:
+            - button "Compras Zapatillas · 18/08 -S/ 280.00" [ref=f6e191]:
+              - generic [ref=f6e196]:
+                - generic [ref=f6e197]: Compras
+                - generic [ref=f6e198]: Zapatillas · 18/08
+              - generic [ref=f6e199]: "-S/ 280.00"
+            - button "Eliminar movimiento" [ref=f6e200]
+          - generic [ref=f6e204]:
+            - button "Comida Mercado · 16/08 -S/ 240.00" [ref=f6e205]:
+              - generic [ref=f6e210]:
+                - generic [ref=f6e211]: Comida
+                - generic [ref=f6e212]: Mercado · 16/08
+              - generic [ref=f6e213]: "-S/ 240.00"
+            - button "Eliminar movimiento" [ref=f6e214]
+    - button "Registrar movimiento" [ref=f6e218]
+    - navigation [ref=f6e220]:
+      - generic [ref=f6e221]:
+        - link "Resumen" [ref=f6e222] [cursor=pointer]:
+          - /url: /
+        - link "Historial" [ref=f6e228] [cursor=pointer]:
+          - /url: /historial
+        - link "Categorías" [ref=f6e230] [cursor=pointer]:
+          - /url: /categorias
+  - region "Notifications alt+T"

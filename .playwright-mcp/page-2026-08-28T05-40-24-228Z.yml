@@ -1,0 +1,109 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]:
+        - button "Mes anterior" [ref=f1e7]
+        - button "agosto 2026" [disabled] [ref=f1e10]
+        - button "Mes siguiente" [ref=f1e11]
+      - generic [ref=f1e14]:
+        - generic [ref=f1e15]:
+          - generic [ref=f1e16]:
+            - generic [ref=f1e17]: Balance disponible
+            - generic [ref=f1e18]: S/ 1,605.00
+          - generic [ref=f1e19]:
+            - generic [ref=f1e20]: +38%
+            - generic [ref=f1e24]: vs julio 2026
+        - generic [ref=f1e25]:
+          - generic [ref=f1e31]:
+            - generic [ref=f1e32]: Ingresos
+            - generic [ref=f1e33]: S/ 4,850.00
+          - generic [ref=f1e39]:
+            - generic [ref=f1e40]: Gastos
+            - generic [ref=f1e41]: S/ 3,245.00
+      - generic [ref=f1e42]:
+        - generic [ref=f1e43]:
+          - heading "Gastos del mes" [level=2] [ref=f1e44]
+          - button "Ver todas" [ref=f1e45]
+        - generic [ref=f1e48]:
+          - generic [ref=f1e55]:
+            - generic [ref=f1e56]: Vivienda
+            - generic [ref=f1e57]:
+              - text: S/ 1,200.00
+              - generic [ref=f1e58]: 37%
+          - generic [ref=f1e67]:
+            - generic [ref=f1e68]: Comida
+            - generic [ref=f1e69]:
+              - text: S/ 875.00
+              - generic [ref=f1e70]: 27%
+          - generic [ref=f1e78]:
+            - generic [ref=f1e79]: Servicios
+            - generic [ref=f1e80]:
+              - text: S/ 330.00
+              - generic [ref=f1e81]: 10%
+        - button "+ 4 categorías · S/ 840.00" [ref=f1e84]
+      - generic [ref=f1e88]:
+        - generic [ref=f1e89]:
+          - generic [ref=f1e92]:
+            - paragraph [ref=f1e93]: Comida
+            - paragraph [ref=f1e94]: Te pasaste · S/ 75.00 de más
+          - generic [ref=f1e95]: 109%
+        - generic [ref=f1e96]:
+          - generic [ref=f1e99]:
+            - paragraph [ref=f1e100]: Vivienda
+            - paragraph [ref=f1e101]: Al límite · quedan S/ 0.00
+          - generic [ref=f1e102]: 100%
+        - generic [ref=f1e103]:
+          - generic [ref=f1e106]:
+            - paragraph [ref=f1e107]: Transporte
+            - paragraph [ref=f1e108]: Casi al límite · quedan S/ 30.00
+          - generic [ref=f1e109]: 90%
+      - generic [ref=f1e110]:
+        - generic [ref=f1e111]:
+          - heading "Lo último" [level=2] [ref=f1e112]
+          - button "Ver todo" [ref=f1e113]
+        - generic [ref=f1e116]:
+          - generic [ref=f1e117]:
+            - button "Comida Almuerzos · 22/08 -S/ 145.00" [ref=f1e118]:
+              - generic [ref=f1e123]:
+                - generic [ref=f1e124]: Comida
+                - generic [ref=f1e125]: Almuerzos · 22/08
+              - generic [ref=f1e126]: "-S/ 145.00"
+            - button "Eliminar movimiento" [ref=f1e127]
+          - generic [ref=f1e131]:
+            - button "Salud Farmacia · 21/08 -S/ 130.00" [ref=f1e132]:
+              - generic [ref=f1e137]:
+                - generic [ref=f1e138]: Salud
+                - generic [ref=f1e139]: Farmacia · 21/08
+              - generic [ref=f1e140]: "-S/ 130.00"
+            - button "Eliminar movimiento" [ref=f1e141]
+          - generic [ref=f1e145]:
+            - button "Transporte Combustible · 20/08 -S/ 95.00" [ref=f1e146]:
+              - generic [ref=f1e152]:
+                - generic [ref=f1e153]: Transporte
+                - generic [ref=f1e154]: Combustible · 20/08
+              - generic [ref=f1e155]: "-S/ 95.00"
+            - button "Eliminar movimiento" [ref=f1e156]
+          - generic [ref=f1e160]:
+            - button "Compras Zapatillas · 18/08 -S/ 280.00" [ref=f1e161]:
+              - generic [ref=f1e166]:
+                - generic [ref=f1e167]: Compras
+                - generic [ref=f1e168]: Zapatillas · 18/08
+              - generic [ref=f1e169]: "-S/ 280.00"
+            - button "Eliminar movimiento" [ref=f1e170]
+          - generic [ref=f1e174]:
+            - button "Comida Mercado · 16/08 -S/ 240.00" [ref=f1e175]:
+              - generic [ref=f1e180]:
+                - generic [ref=f1e181]: Comida
+                - generic [ref=f1e182]: Mercado · 16/08
+              - generic [ref=f1e183]: "-S/ 240.00"
+            - button "Eliminar movimiento" [ref=f1e184]
+    - button "Registrar movimiento" [ref=f1e188]
+    - navigation [ref=f1e190]:
+      - generic [ref=f1e191]:
+        - link "Resumen" [ref=f1e192] [cursor=pointer]:
+          - /url: /
+        - link "Historial" [ref=f1e198] [cursor=pointer]:
+          - /url: /historial
+        - link "Categorías" [ref=f1e200] [cursor=pointer]:
+          - /url: /categorias
+  - region "Notifications alt+T"
