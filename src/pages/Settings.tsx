@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
-import { Copy, Download, Share2, Upload } from 'lucide-react'
+import { Copy, Download, RotateCcw, Share2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
-import { formatMoney, monthLabel } from '@/lib/format'
-import { replaceData, useData } from '@/lib/store'
+import { formatMoney, monthLabelCap } from '@/lib/format'
+import { replaceData, resetData, useData } from '@/lib/store'
 
 /** En navegadores sin Web Share (escritorio) el respaldo baja como archivo. */
 const PUEDE_COMPARTIR = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function'
@@ -75,6 +75,14 @@ export function Settings() {
     }
   }
 
+  function empezarDeCero() {
+    const previo = resetData()
+    toast('Datos borrados · categorías por defecto restauradas', {
+      action: { label: 'Deshacer', onClick: () => replaceData(previo) },
+      duration: 10000,
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4 px-4 pb-4 pt-nav">
       <h1 className="px-1 text-lg font-semibold">Ajustes</h1>
@@ -91,10 +99,9 @@ export function Settings() {
               meses.length === 0
                 ? '—'
                 : meses.length === 1
-                  ? monthLabel(meses[0])
-                  : `${meses.length} (desde ${monthLabel(meses[0])})`
+                  ? monthLabelCap(meses[0])
+                  : `${meses.length} · desde ${monthLabelCap(meses[0])}`
             }
-            capitalize
           />
         </dl>
         <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
@@ -140,23 +147,31 @@ export function Settings() {
           </p>
         </div>
       </section>
+
+      <section className="surface flex flex-col gap-3 p-5">
+        <h2 className="text-base font-semibold">Empezar de cero</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Borra todos los movimientos y vuelve a las categorías por defecto. Útil para
+          limpiar datos de prueba. Exporta antes si quieres conservarlos.
+        </p>
+        <Button
+          onClick={empezarDeCero}
+          variant="outline"
+          className="h-11 justify-start gap-2 text-destructive"
+        >
+          <RotateCcw size={17} />
+          Borrar todo y empezar de cero
+        </Button>
+      </section>
     </div>
   )
 }
 
-function Dato({
-  label,
-  value,
-  capitalize,
-}: {
-  label: string
-  value: string
-  capitalize?: boolean
-}) {
+function Dato({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`font-semibold tabular-nums ${capitalize ? 'capitalize' : ''}`}>{value}</dd>
+      <dd className="font-semibold tabular-nums">{value}</dd>
     </div>
   )
 }

@@ -37,8 +37,8 @@ export function Categories() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 pt-nav">
-      <header className="flex items-center justify-between">
+    <div className="flex flex-col gap-5 px-4 pb-4 pt-nav">
+      <header className="flex items-center justify-between px-1">
         <h1 className="text-lg font-semibold">Categorías</h1>
         <Button
           size="sm"
@@ -89,7 +89,7 @@ function Section({
   return (
     <section className="flex flex-col gap-2">
       <h3 className="px-1 text-sm font-semibold text-muted-foreground">{title}</h3>
-      <div className="divide-y divide-border rounded-2xl border border-border">
+      <div className="surface divide-y divide-border overflow-hidden">
         {items.length === 0 && (
           <p className="p-4 text-sm text-muted-foreground">Sin categorías.</p>
         )}
@@ -156,7 +156,7 @@ function EditForm({ category, onDone }: { category: Category; onDone: () => void
   }
 
   return (
-    <div className="flex flex-col gap-4 border-t border-border bg-muted/30 p-4">
+    <div className="flex flex-col gap-4 border-t border-border bg-muted/40 p-4">
       <div className="grid gap-2">
         <Label htmlFor={`n-${category.id}`}>Nombre</Label>
         <Input id={`n-${category.id}`} value={name} onChange={(e) => setName(e.target.value)} />
@@ -221,7 +221,7 @@ function CreateForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-muted/30 p-4">
+    <div className="surface flex flex-col gap-4 p-5">
       <Input placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
       <div className="grid grid-cols-2 gap-2">
         <button

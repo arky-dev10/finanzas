@@ -5,7 +5,7 @@ import { MonthNav } from '@/components/MonthNav'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
-import { formatMoney, monthKey, monthLabel } from '@/lib/format'
+import { formatMoney, monthKey, monthLabelCap } from '@/lib/format'
 import {
   balanceTrend,
   budgetStatus,
@@ -93,9 +93,7 @@ export function Dashboard() {
                 {trend.pct > 0 ? '+' : ''}
                 {trend.pct}%
               </span>
-              <span className="text-xs text-muted-foreground">
-                vs <span className="capitalize">{monthLabel(trend.previo)}</span>
-              </span>
+              <span className="text-xs text-muted-foreground">vs {monthLabelCap(trend.previo)}</span>
             </div>
           )}
         </div>

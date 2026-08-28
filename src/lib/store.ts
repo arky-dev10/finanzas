@@ -73,6 +73,13 @@ export function useData(): Data {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
+/** Vuelve a las categorías por defecto y borra todos los movimientos. Devuelve lo anterior. */
+export function resetData(): Data {
+  const previo = data
+  commit({ categories: DEFAULT_CATEGORIES, transactions: [] })
+  return previo
+}
+
 /** Reemplaza todo el contenido (importar respaldo). Devuelve lo anterior para deshacer. */
 export function replaceData(next: Data): Data {
   const previo = data

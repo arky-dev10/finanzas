@@ -31,6 +31,13 @@ export function monthLabel(key: string): string {
   return `${MONTHS[Number(m) - 1]} ${y}`
 }
 
+/** "agosto 2026" -> "Agosto 2026". Para meses embebidos en una frase,
+ *  donde `capitalize` de CSS capitalizaría también las otras palabras. */
+export function monthLabelCap(key: string): string {
+  const l = monthLabel(key)
+  return l.charAt(0).toUpperCase() + l.slice(1)
+}
+
 /** Etiqueta corta para el eje del gráfico mensual: "ago" */
 export function monthShort(key: string): string {
   const [, m] = key.split('-')
