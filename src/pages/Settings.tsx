@@ -2,9 +2,11 @@ import { useRef, useState } from 'react'
 import { Copy, Download, RotateCcw, Share2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
-import { formatMoney, monthLabelCap } from '@/lib/format'
-import { replaceData, resetData, useData } from '@/lib/store'
+import { formatMoney, monthLabelCap, sanitizeAmount } from '@/lib/format'
+import { replaceData, resetData, setMonthlyBudget, useData } from '@/lib/store'
 
 /** En navegadores sin Web Share (escritorio) el respaldo baja como archivo. */
 const PUEDE_COMPARTIR = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function'
@@ -87,6 +89,9 @@ export function Settings() {
     <div className="flex flex-col gap-4 px-4 pb-4 pt-nav">
       <h1 className="px-1 text-lg font-semibold">Ajustes</h1>
 
+      {/* `key` para que el input se re-sincronice tras importar o empezar de cero. */}
+      <PresupuestoMensual key={data.monthlyBudget} actual={data.monthlyBudget} />
+
       <section className="surface flex flex-col gap-4 p-5">
         <h2 className="text-base font-semibold">Tus datos</h2>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -164,6 +169,52 @@ export function Settings() {
         </Button>
       </section>
     </div>
+  )
+}
+
+/** Tope de gasto de todo el mes: lo que el Resumen usa para el % del presupuesto. */
+function PresupuestoMensual({ actual }: { actual: number }) {
+  const [valor, setValor] = useState(actual > 0 ? String(actual) : '')
+
+  function guardar() {
+    const limpio = valor.trim()
+    const monto = limpio === '' ? 0 : Number(limpio)
+    if (!Number.isFinite(monto)) {
+      toast.error('Escribe un monto válido')
+      return
+    }
+    setMonthlyBudget(monto)
+    toast.success(
+      monto > 0 ? `Presupuesto mensual: ${formatMoney(monto)}` : 'Presupuesto mensual desactivado',
+    )
+  }
+
+  const sinCambios = (actual > 0 ? String(actual) : '') === valor.trim()
+
+  return (
+    <section className="surface flex flex-col gap-3 p-5">
+      <h2 className="text-base font-semibold">Presupuesto mensual</h2>
+      <div className="grid gap-2">
+        <Label htmlFor="tope">Cuánto quieres gastar como máximo al mes</Label>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">S/</span>
+          <Input
+            id="tope"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={valor}
+            onChange={(e) => setValor(sanitizeAmount(e.target.value))}
+          />
+        </div>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        El Resumen muestra qué porcentaje de este monto llevas gastado en el mes. Déjalo
+        vacío para no llevar tope. Es aparte de los presupuestos por categoría.
+      </p>
+      <Button onClick={guardar} disabled={sinCambios} className="h-11">
+        Guardar presupuesto
+      </Button>
+    </section>
   )
 }
 

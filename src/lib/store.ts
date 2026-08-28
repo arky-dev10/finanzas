@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { DEFAULT_MONTHLY_BUDGET } from '@/lib/budget'
 import { monthKey, shiftMonth } from '@/lib/format'
 import { parseData, type Data } from '@/lib/backup'
 import type { Category, Transaction, TxType } from '@/types'
@@ -36,7 +37,15 @@ function load(): Data {
   } catch {
     /* ignore */
   }
-  return { categories: DEFAULT_CATEGORIES, transactions: [] }
+  return initial()
+}
+
+function initial(): Data {
+  return {
+    categories: DEFAULT_CATEGORIES,
+    transactions: [],
+    monthlyBudget: DEFAULT_MONTHLY_BUDGET,
+  }
 }
 
 let data: Data = load()
@@ -76,14 +85,18 @@ export function useData(): Data {
 /** Vuelve a las categorías por defecto y borra todos los movimientos. Devuelve lo anterior. */
 export function resetData(): Data {
   const previo = data
-  commit({ categories: DEFAULT_CATEGORIES, transactions: [] })
+  commit(initial())
   return previo
 }
 
 /** Reemplaza todo el contenido (importar respaldo). Devuelve lo anterior para deshacer. */
 export function replaceData(next: Data): Data {
   const previo = data
-  commit({ categories: next.categories, transactions: next.transactions })
+  commit({
+    categories: next.categories,
+    transactions: next.transactions,
+    monthlyBudget: next.monthlyBudget,
+  })
   return previo
 }
 
@@ -141,6 +154,7 @@ export function deleteCategory(id: string): { category?: Category; transactions:
   const category = data.categories.find((c) => c.id === id)
   const transactions = data.transactions.filter((t) => t.categoryId === id)
   commit({
+    ...data,
     categories: data.categories.filter((c) => c.id !== id),
     transactions: data.transactions.filter((t) => t.categoryId !== id),
   })
@@ -149,9 +163,17 @@ export function deleteCategory(id: string): { category?: Category; transactions:
 
 export function restoreCategory(category: Category, transactions: Transaction[]) {
   commit({
+    ...data,
     categories: [...data.categories, category],
     transactions: [...transactions, ...data.transactions],
   })
+}
+
+/* ---------- tope mensual ---------- */
+
+/** Cambia el tope de gasto de todo el mes. 0 lo desactiva. */
+export function setMonthlyBudget(amount: number) {
+  commit({ ...data, monthlyBudget: Math.max(0, amount) })
 }
 
 /* ---------- selectores ---------- */
@@ -206,6 +228,25 @@ export function balanceTrend(month: string) {
   if (previo <= 0) return null
   return { pct: Math.round(((actual - previo) / previo) * 100), previo: shiftMonth(month, -1) }
 }
+
+/**
+ * Avance del tope global del mes: cuánto del presupuesto total ya se gastó.
+ * Devuelve null si no hay tope definido, para que la UI simplemente no lo muestre.
+ */
+export function monthlyBudgetStatus(month: string) {
+  const budget = data.monthlyBudget
+  if (budget <= 0) return null
+  const spent = monthTotals(month).expense
+  return {
+    budget,
+    spent,
+    remaining: budget - spent,
+    pct: spent / budget,
+    over: spent > budget,
+  }
+}
+
+export type MonthlyBudgetStatus = NonNullable<ReturnType<typeof monthlyBudgetStatus>>
 
 /** Avance de presupuesto del mes, solo para categorías que tengan monto definido. */
 export function budgetStatus(month: string) {

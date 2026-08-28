@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  ChevronRight,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
 import { MonthNav } from '@/components/MonthNav'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { TransactionItem } from '@/components/TransactionItem'
@@ -11,7 +19,9 @@ import {
   budgetStatus,
   expenseByCategory,
   getCategory,
+  monthlyBudgetStatus,
   monthTotals,
+  type MonthlyBudgetStatus,
   transactionsByMonth,
   useData,
 } from '@/lib/store'
@@ -32,9 +42,10 @@ interface Row {
 
 /**
  * Cuatro niveles, en este orden:
- *  1. ¿Cuánto dinero tengo?          — siempre visible
+ *  1. ¿Cuánto dinero tengo?          — balance, ingresos/gastos y avance del tope
+ *                                      del mes, todo en la misma tarjeta
  *  2. ¿En qué se me está yendo?      — inmediatamente debajo
- *  3. ¿Me pasé de algún presupuesto? — solo si requiere atención
+ *  3. ¿Me pasé de algún presupuesto? — solo si requiere atención (por categoría)
  *  4. ¿Qué fue lo último que pasó?   — contexto reciente
  * Comparar meses y explorar la dona es navegación: vive en Historial.
  */
@@ -48,6 +59,7 @@ export function Dashboard() {
   const trend = balanceTrend(month)
   const recent = transactionsByMonth(month).slice(0, RECENT)
   const alertas = budgetStatus(month).filter((b) => b.pct >= ATENCION)
+  const tope = monthlyBudgetStatus(month)
 
   const rows: Row[] = useMemo(() => {
     const base = expenseByCategory(month).flatMap(({ categoryId, total }) => {
@@ -115,6 +127,8 @@ export function Dashboard() {
             pad
           />
         </div>
+
+        {tope && <MonthlyBudget status={tope} />}
       </section>
 
       {/* 2 — ¿En qué se me está yendo? */}
@@ -221,6 +235,55 @@ export function Dashboard() {
           )}
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * Avance del tope del mes, al pie de la tarjeta de balance.
+ * No repite el gasto del mes (ya está arriba, en "Gastos"): dice el porcentaje,
+ * cuánto queda y contra qué tope. La barra se llena al 100% cuando te pasaste —
+ * el exceso se cuenta con el monto, no estirando la barra.
+ */
+function MonthlyBudget({ status }: { status: MonthlyBudgetStatus }) {
+  const st = budgetState(status.pct, status.over)
+  const pct = Math.round(status.pct * 100)
+  const Icon = st.icon === 'alert' ? AlertTriangle : CheckCircle2
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium">Presupuesto del mes</span>
+        <span className="shrink-0 text-lg font-bold tabular-nums" style={{ color: st.color }}>
+          {pct}%
+        </span>
+      </div>
+
+      <div
+        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-valuetext={`${pct}% del presupuesto del mes`}
+      >
+        <div
+          className="h-full rounded-full transition-[width]"
+          style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: st.color }}
+        />
+      </div>
+
+      <p className="flex flex-wrap items-center gap-x-1.5 text-xs">
+        <Icon size={14} className="shrink-0" style={{ color: st.color }} />
+        <span className="font-medium" style={{ color: st.color }}>
+          {st.text}
+        </span>
+        <span className="tabular-nums text-muted-foreground">
+          {status.over
+            ? `· ${formatMoney(-status.remaining)} sobre los ${formatMoney(status.budget)}`
+            : `· quedan ${formatMoney(status.remaining)} de ${formatMoney(status.budget)}`}
+        </span>
+      </p>
     </div>
   )
 }
