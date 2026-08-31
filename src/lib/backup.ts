@@ -34,9 +34,11 @@ export interface Data {
  * primer ajuste: son los movimientos que el usuario anotó, no lo que hay en el
  * banco. Efectivo arranca en cero de verdad, sin movimientos que lo desmientan.
  */
+export const DEFAULT_ACCOUNT_ID = 'a_bcp'
+
 export function seedAccounts(): Account[] {
   return [
-    { id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true },
+    { id: DEFAULT_ACCOUNT_ID, name: 'BCP', kind: 'bank', balancePending: true },
     { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
   ]
 }
@@ -81,8 +83,11 @@ function isTransaction(v: unknown): v is Transaction {
   // Solo un ajuste puede ser negativo: un gasto negativo sumaría al saldo.
   if (t.nature !== 'adjustment' && (t.amountCents as number) < 0) return false
   // La categoría es obligatoria salvo en ajustes, que no pertenecen a ninguna.
-  if (t.nature === 'adjustment' ? t.categoryId !== undefined && typeof t.categoryId !== 'string'
-                                : typeof t.categoryId !== 'string') return false
+  if (t.nature === 'adjustment') {
+    if (t.categoryId !== undefined && typeof t.categoryId !== 'string') return false
+  } else if (typeof t.categoryId !== 'string') {
+    return false
+  }
   if (t.medium !== undefined && !MEDIUMS.includes(t.medium as string)) return false
   return t.note === undefined || typeof t.note === 'string'
 }
@@ -119,7 +124,7 @@ function migrateTransaction(t: LegacyTransaction): Transaction {
     id: t.id,
     amountCents: Math.round(t.amount * 100),
     nature: t.type,
-    accountId: 'a_bcp',
+    accountId: DEFAULT_ACCOUNT_ID,
     categoryId: t.categoryId,
     date: t.date,
     ...(t.note === undefined ? {} : { note: t.note }),

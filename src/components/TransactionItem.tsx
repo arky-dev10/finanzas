@@ -3,16 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { formatMoney, shortDate } from '@/lib/format'
-import { deleteTransaction, getCategory, insertTransaction } from '@/lib/store'
+import { deleteTransaction, getCategory, insertTransaction, signedCents } from '@/lib/store'
 import type { Transaction } from '@/types'
 
 export function TransactionItem({ tx }: { tx: Transaction }) {
   const navigate = useNavigate()
   // Los ajustes no tienen categoría.
   const cat = tx.categoryId ? getCategory(tx.categoryId) : undefined
-  // Cuánto suma o resta al saldo: una devolución entra, un ajuste puede ir
-  // para cualquier lado.
-  const signo = tx.nature === 'expense' ? -tx.amountCents : tx.amountCents
+  const signo = signedCents(tx)
   const entra = signo > 0
 
   function remove() {

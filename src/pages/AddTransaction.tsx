@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { addTransaction, getTransaction, updateTransaction, useData } from '@/lib/store'
 import { centsToInput, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
+import { DEFAULT_ACCOUNT_ID } from '@/lib/backup'
 import type { CategoryKind } from '@/types'
 
 export function AddTransaction() {
@@ -55,7 +56,7 @@ export function AddTransaction() {
       categoryId,
       nature: type,
       // Sin selector de cuenta todavía: va a la primera, como todo el historial.
-      accountId: existing?.accountId ?? accounts[0]?.id ?? 'a_bcp',
+      accountId: existing?.accountId ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
       date,
       note: note.trim() || undefined,
     }
