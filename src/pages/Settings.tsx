@@ -33,7 +33,7 @@ export function Settings() {
     // En iOS instalado como PWA la descarga directa no funciona; compartir sí.
     if (navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'Respaldo Finanzas' })
+        await navigator.share({ files: [file], title: 'Respaldo Kumi' })
         return
       } catch {
         // el usuario canceló o no se pudo compartir: seguimos con la descarga
@@ -64,7 +64,7 @@ export function Settings() {
       const texto = await file.text()
       const parsed = parseData(JSON.parse(texto))
       if (!parsed) {
-        toast.error('El archivo no tiene el formato de un respaldo de Finanzas')
+        toast.error('El archivo no tiene el formato de un respaldo de Kumi')
         return
       }
       const previo = replaceData(parsed)
@@ -187,7 +187,7 @@ function InstalarApp() {
 
   async function instalar() {
     const acepto = await install()
-    if (acepto) toast.success('Finanzas quedó en tu pantalla de inicio')
+    if (acepto) toast.success('Kumi quedó en tu pantalla de inicio')
   }
 
   return (
@@ -217,7 +217,7 @@ function InstalarApp() {
       ) : (
         <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
           Abre el menú de tu navegador y busca{' '}
-          <b className="font-semibold text-foreground">Instalar Finanzas</b>. Si no
+          <b className="font-semibold text-foreground">Instalar Kumi</b>. Si no
           aparece, tu navegador no soporta instalar apps: probá con Chrome o Edge.
         </p>
       )}

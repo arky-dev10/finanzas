@@ -1,32 +1,17 @@
-# React + TypeScript + Vite
+# Kumi
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+App PWA para llevar el control de gastos e ingresos mensuales por categorías, en soles y
+sin conexión. Documentación completa (decisiones de producto, arquitectura, modelo de
+datos) en [`CONTEXTO.md`](./CONTEXTO.md).
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev       # desarrollo (PWA activa en dev)
+npm run build     # tsc -b && vite build + genera sw.js / manifest
+npm run icons     # regenera íconos y splashes desde assets/brand/kumi-logo.png
+npm run preview   # sirve el build para probar la PWA instalable
+npm run lint      # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Stack: Vite 8 + React 19 (TypeScript) · Tailwind CSS v4 + shadcn/ui · vite-plugin-pwa ·
+sharp (solo dev, para íconos).
