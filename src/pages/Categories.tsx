@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, Pencil, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,6 +87,7 @@ function Section({
   onEdit: (id: string | null) => void
   onDelete: (id: string) => void
 }) {
+  const navigate = useNavigate()
   return (
     <section className="flex flex-col gap-2">
       <h3 className="px-1 text-sm font-semibold text-muted-foreground">{title}</h3>
@@ -97,8 +99,10 @@ function Section({
           <div key={c.id}>
             <div className="flex items-center gap-3 p-3">
               <CategoryIcon category={c} size="sm" />
+              {/* La fila entera va al detalle; el lápiz de al lado sigue
+                  abriendo la edición inline, no hay que navegar para eso. */}
               <button
-                onClick={() => onEdit(editingId === c.id ? null : c.id)}
+                onClick={() => navigate(`/categoria/${c.id}`)}
                 className="min-w-0 flex-1 text-left"
               >
                 <span className="block truncate text-sm font-medium">{c.name}</span>
