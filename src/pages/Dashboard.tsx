@@ -34,7 +34,12 @@ const TOP = 3
 const RECENT = 5
 /** Un presupuesto solo aparece si ya te pasaste o estás por pasarte. */
 const ATENCION = 0.9
-const LINK = '#2a78d6'
+/*
+ * Las acciones secundarias («Ver todas», «Ver todo») no llevan color propio:
+ * el azul de antes no existe en la paleta de marca, y la salvia no pasa AA como
+ * texto sobre crema. Jerarquía por peso tipográfico + el chevron como afordancia.
+ */
+const ACCION = 'flex items-center gap-0.5 text-sm font-semibold text-foreground'
 
 interface Row {
   category: Category
@@ -65,6 +70,12 @@ export function Dashboard() {
   const tope = monthlyBudgetStatus(month)
   const { totalCents, reliable } = totalInAccounts()
   const pendientes = accounts.filter((a) => a.balancePending)
+  /*
+   * Recién migrado, ninguna cuenta tiene saldo configurado: el total no es
+   * S/ 0.00, es desconocido. Mostrar un cero sería la primera mentira que ve
+   * el usuario, así que la tarjeta cambia de cara y pide lo que le falta.
+   */
+  const sinConfigurar = pendientes.length === accounts.length
 
   /*
    * Contra el mes anterior comparamos el GASTO, no el saldo: «En cuentas» es
@@ -104,36 +115,62 @@ export function Dashboard() {
 
       {/* 1 — ¿Cuánta plata tengo? */}
       <section className="surface flex flex-col gap-4 p-5">
-        <button
-          onClick={() => navigate('/cuentas')}
-          className="-mx-2 -mt-2 rounded-xl px-2 pb-1 pt-2 text-left transition active:bg-muted/50"
-        >
-          <span className="flex items-start justify-between gap-3">
-            <span className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm text-muted-foreground">
-                En cuentas
-                {month !== monthKey() && <span className="ml-1.5 opacity-70">· hoy</span>}
+        {sinConfigurar ? (
+          <div className="-mt-1 flex flex-col items-start gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm text-muted-foreground">En cuentas</span>
+              <h2 className="text-2xl font-bold leading-tight tracking-tight">
+                Falta configurar tus saldos
+              </h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Anotá cuánto tenés hoy en {accounts.map((a) => a.name).join(' y ')} y el total
+                aparece acá. Kumi ya guarda tus movimientos: lo que falta es el punto de partida.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/cuentas')}
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition active:scale-[0.98]"
+            >
+              Configurar saldos
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate('/cuentas')}
+            className="-mx-2 -mt-2 rounded-xl px-2 pb-1 pt-2 text-left transition active:bg-muted/50"
+          >
+            <span className="flex items-start justify-between gap-3">
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-sm text-muted-foreground">
+                  En cuentas
+                  {month !== monthKey() && <span className="ml-1.5 opacity-70">· hoy</span>}
+                </span>
+                <span className="text-[2.25rem] font-bold leading-none tracking-tight tabular-nums">
+                  {formatMoney(totalCents)}
+                </span>
               </span>
-              <span className="text-[2.25rem] font-bold leading-none tracking-tight tabular-nums">
-                {formatMoney(totalCents)}
+              <ChevronRight size={20} className="mt-1 shrink-0 text-muted-foreground" />
+            </span>
+
+            <span className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              {accounts.map((a) => (
+                <Saldo key={a.id} account={a} />
+              ))}
+            </span>
+
+            {/*
+              El total ya no incluye las cuentas sin configurar (decisión D6), así
+              que no es «aproximado»: es exacto y le falta algo. Decir cuál.
+            */}
+            {!reliable && (
+              <span className="mt-2 block text-xs text-muted-foreground">
+                No incluye {pendientes.map((a) => a.name).join(' y ')} —{' '}
+                {pendientes.length === 1 ? 'falta configurar su saldo' : 'faltan sus saldos'}.
               </span>
-            </span>
-            <ChevronRight size={20} className="mt-1 shrink-0 text-muted-foreground" />
-          </span>
-
-          <span className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            {accounts.map((a) => (
-              <Saldo key={a.id} account={a} />
-            ))}
-          </span>
-
-          {!reliable && (
-            <span className="mt-2 block text-xs text-muted-foreground">
-              Aproximado — falta configurar el saldo de{' '}
-              {pendientes.map((a) => a.name).join(' y ')}.
-            </span>
-          )}
-        </button>
+            )}
+          </button>
+        )}
 
         <div className="grid grid-cols-2 divide-x divide-border border-t border-border pt-4">
           <Total
@@ -179,8 +216,7 @@ export function Dashboard() {
           {rows.length > TOP && (
             <button
               onClick={() => setVerTodas((v) => !v)}
-              className="flex items-center gap-0.5 text-sm font-medium"
-              style={{ color: LINK }}
+              className={ACCION}
             >
               {verTodas ? 'Ver menos' : 'Ver todas'}
               <ChevronRight
@@ -259,8 +295,7 @@ export function Dashboard() {
           <h2 className="text-base font-semibold">Lo último</h2>
           <button
             onClick={() => navigate('/historial')}
-            className="flex items-center gap-0.5 text-sm font-medium"
-            style={{ color: LINK }}
+            className={ACCION}
           >
             Ver todo
             <ChevronRight size={16} />
