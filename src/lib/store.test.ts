@@ -156,6 +156,19 @@ describe('totalInAccounts', () => {
     expect(totalInAccounts()).toEqual({ totalCents: 501000, reliable: true })
   })
 
+  it('sigue sin ser confiable si falta calibrar el efectivo', () => {
+    // Calibrar solo el banco no alcanza: la billetera sigue siendo desconocida
+    // y presentar el total como exacto sería mentir.
+    sembrar({
+      accounts: [
+        { id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true },
+        { id: 'a_cash', name: 'Efectivo', kind: 'cash', balancePending: true },
+      ],
+    })
+    addAdjustment('a_bcp', 300000, '2026-08-25')
+    expect(totalInAccounts()).toEqual({ totalCents: 300000, reliable: false })
+  })
+
   it('da 0 no confiable si ninguna cuenta está calibrada', () => {
     // Es el estado justo después de migrar: BCP arrastra todo el historial
     // pero todavía no sabemos cuánta plata hay ahí de verdad.
