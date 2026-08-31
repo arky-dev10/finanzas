@@ -1,4 +1,6 @@
-import { formatMoney, formatMoneyShort, monthShort } from '@/lib/format'
+import { monthShort } from '@/lib/format'
+// FASE A: los formatters reciben céntimos. FASE B: cambiar a '@/lib/format'.
+import { formatMoney, formatMoneyShort } from '@/preview-fase-a'
 
 export interface MonthPoint {
   month: string

@@ -1,4 +1,5 @@
-import { formatMoney } from '@/lib/format'
+// FASE A: formatMoney recibe céntimos. FASE B: cambiar a '@/lib/format'.
+import { formatMoney } from '@/preview-fase-a'
 
 export interface Slice {
   id: string
@@ -20,20 +21,24 @@ const GAP = 3
  */
 export function DonutChart({
   slices,
+  total,
   selectedId,
   onSelect,
 }: {
   slices: Slice[]
+  /** Gasto neto del mes: el número del centro y el denominador de los %. */
+  total: number
   selectedId: string | null
   onSelect: (id: string | null) => void
 }) {
-  const total = slices.reduce((s, x) => s + x.value, 0)
+  // La geometría del anillo sí se reparte entre las porciones: tiene que cerrar 360°.
+  const dibujado = slices.reduce((s, x) => s + x.value, 0)
   const selected = slices.find((s) => s.id === selectedId) ?? null
 
   let running = 0
   const arcs: (Slice & { len: number; offset: number })[] = []
   for (const s of slices) {
-    const full = (s.value / total) * C
+    const full = (s.value / dibujado) * C
     arcs.push({ ...s, len: Math.max(full - GAP, 1), offset: running })
     running += full
   }
