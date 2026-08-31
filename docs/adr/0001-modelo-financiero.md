@@ -53,6 +53,15 @@ El vocabulario canónico vive en `CONTEXT.md`. Las piezas y sus porqués:
 - *Llamar "Disponible" al total de saldos ya*: en F3 cambiaría de significado bajo el
   mismo nombre.
 
+## Enmienda D6 (2026-08-31, post-implementación)
+
+«En cuentas» suma **solo las cuentas calibradas**: una cuenta con saldo pendiente de
+configurar queda fuera de la suma (su saldo es desconocido, no cero) y el total se marca
+como incompleto (`reliable: false`). Sin esto, la cuenta pendiente aportaba sus gastos
+sin su saldo inicial y el total salía menor que la única cuenta visible — parecía un
+error de suma. El caso extremo es el estado post-migración (todas las cuentas pendientes):
+el total es `0` no confiable y la UI debe leerlo como «falta calibrar», nunca como «S/ 0.00».
+
 ## Consecuencias
 
 - `BACKUP_VERSION` sube (migración: `amount`→céntimos, `type`→naturaleza, `accountId`
