@@ -8,8 +8,12 @@ import type { Transaction } from '@/types'
 
 export function TransactionItem({ tx }: { tx: Transaction }) {
   const navigate = useNavigate()
-  const cat = getCategory(tx.categoryId)
-  const isIncome = tx.type === 'income'
+  // Los ajustes no tienen categoría.
+  const cat = tx.categoryId ? getCategory(tx.categoryId) : undefined
+  // Cuánto suma o resta al saldo: una devolución entra, un ajuste puede ir
+  // para cualquier lado.
+  const signo = tx.nature === 'expense' ? -tx.amountCents : tx.amountCents
+  const entra = signo > 0
 
   function remove() {
     deleteTransaction(tx.id)
@@ -36,11 +40,11 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
         </span>
         <span
           className={`text-sm font-semibold tabular-nums ${
-            isIncome ? 'text-emerald-600' : 'text-foreground'
+            entra ? 'text-emerald-600' : 'text-foreground'
           }`}
         >
-          {isIncome ? '+' : '-'}
-          {formatMoney(tx.amount)}
+          {entra ? '+' : '-'}
+          {formatMoney(Math.abs(signo))}
         </span>
       </button>
       <button

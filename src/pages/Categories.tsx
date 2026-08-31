@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { ICON_NAMES, getIcon } from '@/lib/icons'
-import { formatMoney, sanitizeAmount } from '@/lib/format'
+import { centsToInput, formatMoney, parseAmountToCents, sanitizeAmount } from '@/lib/format'
 import { addCategory, deleteCategory, restoreCategory, updateCategory, useData } from '@/lib/store'
-import type { Category, TxType } from '@/types'
+import type { Category, CategoryKind } from '@/types'
 
 /** Misma paleta validada que usan las categorías por defecto. */
 const COLORS = [
@@ -137,14 +137,14 @@ function EditForm({ category, onDone }: { category: Category; onDone: () => void
   const [name, setName] = useState(category.name)
   const [color, setColor] = useState(category.color)
   const [icon, setIcon] = useState(category.icon)
-  const [budget, setBudget] = useState(category.budget ? String(category.budget) : '')
+  const [budget, setBudget] = useState(category.budget ? centsToInput(category.budget) : '')
 
   function save() {
     if (!name.trim()) {
       toast.error('Ponle un nombre')
       return
     }
-    const value = Number(budget)
+    const value = parseAmountToCents(budget) ?? 0
     updateCategory(category.id, {
       name: name.trim(),
       color,
@@ -198,7 +198,7 @@ function EditForm({ category, onDone }: { category: Category; onDone: () => void
 
 function CreateForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<TxType>('expense')
+  const [type, setType] = useState<CategoryKind>('expense')
   const [color, setColor] = useState(COLORS[0])
   const [icon, setIcon] = useState(ICON_NAMES[0])
   const [budget, setBudget] = useState('')
@@ -208,7 +208,7 @@ function CreateForm({ onDone }: { onDone: () => void }) {
       toast.error('Ponle un nombre')
       return
     }
-    const value = Number(budget)
+    const value = parseAmountToCents(budget) ?? 0
     addCategory({
       name: name.trim(),
       type,

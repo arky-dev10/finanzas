@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { sanitizeAmount } from '@/lib/format'
+import { parseAmountToCents, sanitizeAmount } from '@/lib/format'
 import { completeOnboarding, useData } from '@/lib/store'
 
 /**
@@ -21,11 +21,12 @@ export function Welcome() {
   // Si ya pasó por acá, esta ruta no tiene nada que hacer.
   if (data.onboarded) return <Navigate to="/" replace />
 
-  const monto = Number(valor.trim())
-  const valido = valor.trim() !== '' && Number.isFinite(monto) && monto > 0
+  const monto = parseAmountToCents(valor.trim()) ?? 0
+  const valido = monto > 0
 
-  function empezar(amount: number) {
-    completeOnboarding(amount)
+  /** `cents` en 0 = "definirlo después". */
+  function empezar(cents: number) {
+    completeOnboarding(cents)
     navigate('/', { replace: true })
   }
 

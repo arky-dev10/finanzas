@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { monthKey, shiftMonth } from '@/lib/format'
-import { parseData, type Data } from '@/lib/backup'
-import type { Category, Transaction, TxType } from '@/types'
+import { monthKey, shiftMonth, todayISO } from '@/lib/format'
+import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
+import type { Account, Category, Medium, Transaction } from '@/types'
 
 const KEY = 'finanzas-data-v1'
 
@@ -41,6 +41,7 @@ function load(): Data {
 
 function initial(): Data {
   return {
+    accounts: seedAccounts(),
     categories: DEFAULT_CATEGORIES,
     transactions: [],
     monthlyBudget: 0,
@@ -53,7 +54,9 @@ const listeners = new Set<() => void>()
 
 function persist() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(data))
+    // Guardamos `version`: sin ella `parseData` no puede distinguir los datos
+    // en céntimos de los viejos en soles, y los migraría una segunda vez.
+    localStorage.setItem(KEY, JSON.stringify({ version: BACKUP_VERSION, ...data }))
   } catch {
     /* ignore */
   }
@@ -97,6 +100,7 @@ export function resetData(): Data {
 export function replaceData(next: Data): Data {
   const previo = data
   commit({
+    accounts: next.accounts,
     categories: next.categories,
     transactions: next.transactions,
     monthlyBudget: next.monthlyBudget,
@@ -109,15 +113,37 @@ export function getCategory(id: string): Category | undefined {
   return data.categories.find((c) => c.id === id)
 }
 
+export function getAccount(id: string): Account | undefined {
+  return data.accounts.find((a) => a.id === id)
+}
+
 export function getTransaction(id: string): Transaction | undefined {
   return data.transactions.find((t) => t.id === id)
 }
 
 /* ---------- movimientos ---------- */
 
+/** El efectivo no se mueve por un canal: el medio no aplica en cuentas `cash`. */
+function stripMediumOnCash(tx: Transaction): Transaction {
+  if (tx.medium === undefined || getAccount(tx.accountId)?.kind !== 'cash') return tx
+  const limpio = { ...tx }
+  delete limpio.medium
+  return limpio
+}
+
+/** El medio elegido queda como default de la cuenta para la próxima vez. */
+function rememberMedium(accounts: Account[], accountId: string, medium: Medium | undefined): Account[] {
+  if (medium === undefined) return accounts
+  return accounts.map((a) => (a.id === accountId ? { ...a, lastMedium: medium } : a))
+}
+
 export function addTransaction(t: Omit<Transaction, 'id'>) {
-  const tx: Transaction = { ...t, id: crypto.randomUUID() }
-  commit({ ...data, transactions: [tx, ...data.transactions] })
+  const tx = stripMediumOnCash({ ...t, id: crypto.randomUUID() })
+  commit({
+    ...data,
+    accounts: rememberMedium(data.accounts, tx.accountId, tx.medium),
+    transactions: [tx, ...data.transactions],
+  })
 }
 
 /** Reinserta un movimiento conservando su id (para "Deshacer"). */
@@ -127,14 +153,79 @@ export function insertTransaction(tx: Transaction) {
 }
 
 export function updateTransaction(id: string, patch: Partial<Omit<Transaction, 'id'>>) {
+  const previo = data.transactions.find((t) => t.id === id)
+  if (!previo) return
+  // Normalizamos sobre el resultado: el patch puede mover el movimiento a
+  // Efectivo, y ahí el medio que traía deja de tener sentido.
+  const tx = stripMediumOnCash({ ...previo, ...patch })
   commit({
     ...data,
-    transactions: data.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    accounts: rememberMedium(data.accounts, tx.accountId, tx.medium),
+    transactions: data.transactions.map((t) => (t.id === id ? tx : t)),
   })
 }
 
 export function deleteTransaction(id: string) {
   commit({ ...data, transactions: data.transactions.filter((t) => t.id !== id) })
+}
+
+/* ---------- cuentas ---------- */
+
+/** Cuánto suma o resta un movimiento al saldo de su cuenta. */
+function signedCents(t: Transaction): number {
+  return t.nature === 'expense' ? -t.amountCents : t.amountCents
+}
+
+/** Saldo de la cuenta: todos sus movimientos, de todos los meses, ajustes incluidos. */
+export function accountBalanceCents(accountId: string): number {
+  let total = 0
+  for (const t of data.transactions) {
+    if (t.accountId === accountId) total += signedCents(t)
+  }
+  return total
+}
+
+/**
+ * "En cuentas": la suma de todos los saldos. No es el Disponible — todavía no
+ * descuenta compromisos ni deuda. `reliable` es false mientras alguna cuenta
+ * siga sin su ajuste inicial: ahí el total es una cuenta a medias, no un saldo.
+ */
+export function totalInAccounts(): { totalCents: number; reliable: boolean } {
+  let totalCents = 0
+  let reliable = true
+  for (const a of data.accounts) {
+    totalCents += accountBalanceCents(a.id)
+    if (a.balancePending) reliable = false
+  }
+  return { totalCents, reliable }
+}
+
+/**
+ * Calibra una cuenta contra la realidad: anota el delta que falta para llegar
+ * al saldo que el usuario ve en su banco (o cuenta en su bolsillo), en vez de
+ * inventar un gasto o un ingreso. Si ya cuadraba no anota nada, pero igual da
+ * el saldo por configurado: un "Ajuste S/ 0.00" en el historial sería ruido.
+ */
+export function addAdjustment(accountId: string, targetBalanceCents: number, date: string = todayISO()) {
+  const delta = targetBalanceCents - accountBalanceCents(accountId)
+  const accounts = data.accounts.map((a) => {
+    if (a.id !== accountId || a.balancePending === undefined) return a
+    const calibrada = { ...a }
+    delete calibrada.balancePending
+    return calibrada
+  })
+  const ajuste: Transaction = {
+    id: crypto.randomUUID(),
+    amountCents: delta,
+    nature: 'adjustment',
+    accountId,
+    date,
+  }
+  commit({
+    ...data,
+    accounts,
+    transactions: delta === 0 ? data.transactions : [ajuste, ...data.transactions],
+  })
 }
 
 /* ---------- categorías ---------- */
@@ -176,14 +267,14 @@ export function restoreCategory(category: Category, transactions: Transaction[])
 
 /* ---------- tope mensual ---------- */
 
-/** Cambia el tope de gasto de todo el mes. 0 lo desactiva. */
-export function setMonthlyBudget(amount: number) {
-  commit({ ...data, monthlyBudget: Math.max(0, amount) })
+/** Cambia el tope de gasto de todo el mes, en céntimos. 0 lo desactiva. */
+export function setMonthlyBudget(cents: number) {
+  commit({ ...data, monthlyBudget: Math.max(0, cents) })
 }
 
-/** Cierra la bienvenida. `amount` en 0 = "definirlo después". */
-export function completeOnboarding(amount: number) {
-  commit({ ...data, monthlyBudget: Math.max(0, amount), onboarded: true })
+/** Cierra la bienvenida. `cents` en 0 = "definirlo después". */
+export function completeOnboarding(cents: number) {
+  commit({ ...data, monthlyBudget: Math.max(0, cents), onboarded: true })
 }
 
 /* ---------- selectores ---------- */
@@ -194,22 +285,33 @@ export function transactionsByMonth(month: string): Transaction[] {
     .sort((a, b) => (a.date < b.date ? 1 : -1))
 }
 
+/**
+ * Ingreso y gasto NETO del mes, en céntimos: la devolución resta del gasto en
+ * vez de sumar a los ingresos, y el ajuste no aparece — calibra un saldo, no
+ * es plata que entró o salió de la vida del usuario.
+ */
 export function monthTotals(month: string) {
-  const txs = transactionsByMonth(month)
   let income = 0
   let expense = 0
-  for (const t of txs) {
-    if (t.type === 'income') income += t.amount
-    else expense += t.amount
+  for (const t of transactionsByMonth(month)) {
+    if (t.nature === 'income') income += t.amountCents
+    else if (t.nature === 'expense') expense += t.amountCents
+    else if (t.nature === 'refund') expense -= t.amountCents
   }
   return { income, expense, balance: income - expense }
 }
 
+/**
+ * Gasto neto por categoría (gastos − devoluciones del mes). Puede dar 0 o
+ * negativo si te devolvieron más de lo que gastaste ahí este mes: el selector
+ * lo dice tal cual y es la pantalla la que decide si eso se grafica.
+ */
 export function expenseByCategory(month: string) {
-  const txs = transactionsByMonth(month).filter((t) => t.type === 'expense')
   const map = new Map<string, number>()
-  for (const t of txs) {
-    map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + t.amount)
+  for (const t of transactionsByMonth(month)) {
+    if (t.categoryId === undefined) continue
+    if (t.nature === 'expense') map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + t.amountCents)
+    else if (t.nature === 'refund') map.set(t.categoryId, (map.get(t.categoryId) ?? 0) - t.amountCents)
   }
   return [...map.entries()]
     .map(([categoryId, total]) => ({ categoryId, total }))
@@ -276,5 +378,3 @@ export function budgetStatus(month: string) {
     })
     .sort((a, b) => b.pct - a.pct)
 }
-
-export type { TxType }

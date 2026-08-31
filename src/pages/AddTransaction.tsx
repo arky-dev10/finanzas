@@ -7,18 +7,20 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { addTransaction, getTransaction, updateTransaction, useData } from '@/lib/store'
-import { sanitizeAmount, todayISO } from '@/lib/format'
-import type { TxType } from '@/types'
+import { centsToInput, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
+import type { CategoryKind } from '@/types'
 
 export function AddTransaction() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { categories } = useData()
+  const { accounts, categories } = useData()
   const existing = id ? getTransaction(id) : undefined
   const isEdit = Boolean(id)
 
-  const [type, setType] = useState<TxType>(existing?.type ?? 'expense')
-  const [amount, setAmount] = useState(existing ? String(existing.amount) : '')
+  // Esta pantalla todavía es de 2 naturalezas; devolución y ajuste llegan con
+  // el rediseño de Registrar.
+  const [type, setType] = useState<CategoryKind>(existing?.nature === 'income' ? 'income' : 'expense')
+  const [amount, setAmount] = useState(existing ? centsToInput(existing.amountCents) : '')
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
   const [date, setDate] = useState(existing?.date ?? todayISO())
   const [note, setNote] = useState(existing?.note ?? '')
@@ -39,7 +41,7 @@ export function AddTransaction() {
   }
 
   function submit() {
-    const value = Number(amount)
+    const value = parseAmountToCents(amount)
     if (!value || value <= 0) {
       toast.error('Ingresa un monto válido')
       return
@@ -49,9 +51,11 @@ export function AddTransaction() {
       return
     }
     const payload = {
-      amount: value,
+      amountCents: value,
       categoryId,
-      type,
+      nature: type,
+      // Sin selector de cuenta todavía: va a la primera, como todo el historial.
+      accountId: existing?.accountId ?? accounts[0]?.id ?? 'a_bcp',
       date,
       note: note.trim() || undefined,
     }

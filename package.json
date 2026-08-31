@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "icons": "node scripts/generate-icons.ts",
     "lint": "oxlint",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "sharp": "^0.35.4",
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.11"
   }
 }
