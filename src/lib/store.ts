@@ -86,6 +86,19 @@ export function useData(): Data {
 }
 
 /**
+ * Los datos de ahora, para código que no es un componente (la sincronización).
+ * En React usá `useData()`: esto no re-renderiza cuando cambian.
+ */
+export function getData(): Data {
+  return data
+}
+
+/** Avisa cada vez que los datos cambian. Devuelve la función para desuscribirse. */
+export function subscribeToData(listener: () => void): () => void {
+  return subscribe(listener)
+}
+
+/**
  * Vuelve a las categorías por defecto y borra todos los movimientos.
  * Deja `onboarded` en false a propósito: "empezar de cero" te devuelve a la
  * bienvenida, y el "Deshacer" del toast restaura el flag y te trae de vuelta.
