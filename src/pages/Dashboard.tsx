@@ -233,7 +233,7 @@ export function Dashboard() {
           <>
             <div className="flex flex-col gap-4">
               {visibles.map((r) => (
-                <CategoryRow key={r.category.id} row={r} />
+                <CategoryRow key={r.category.id} row={r} month={month} />
               ))}
             </div>
             {!verTodas && ocultas.length > 0 && (
@@ -419,32 +419,43 @@ function Total({
  * gastó) la fila se queda: es información honesta. Pierde la barra y el % —no
  * es una parte del gasto— y se muestra en tono neutro.
  */
-function CategoryRow({ row }: { row: Row }) {
+function CategoryRow({ row, month }: { row: Row; month: string }) {
+  const navigate = useNavigate()
   const negativa = row.total <= 0
+  /*
+   * La fila entera navega al detalle, sin chevron: en esta app una fila que se
+   * toca no lo lleva (las de «Lo último» tampoco). El chevron queda para donde
+   * el tap ya está ocupado, como la leyenda de la dona en Historial.
+   * Va con el mes que se está viendo, no con el actual: los montos de la fila
+   * son de ese mes y el detalle tiene que abrir donde el usuario está mirando.
+   */
   return (
-    <div className="flex items-center gap-3">
+    <button
+      onClick={() => navigate(`/categoria/${row.category.id}?mes=${month}`)}
+      className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-1 text-left transition active:bg-muted/50"
+    >
       <CategoryIcon category={row.category} size="md" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2 text-sm">
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2 text-sm">
           <span className="truncate font-medium">{row.category.name}</span>
           <span className="shrink-0 tabular-nums text-muted-foreground">
             {formatMoney(row.total)}
             {row.pct !== null && <span className="ml-1.5 text-xs opacity-70">{row.pct}%</span>}
           </span>
-        </div>
+        </span>
         {negativa ? (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">
             Las devoluciones superaron al gasto
-          </p>
+          </span>
         ) : (
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full"
+          <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full"
               style={{ width: `${row.width}%`, backgroundColor: row.category.color }}
             />
-          </div>
+          </span>
         )}
-      </div>
-    </div>
+      </span>
+    </button>
   )
 }

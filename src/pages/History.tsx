@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { MonthNav } from '@/components/MonthNav'
 import { TransactionItem } from '@/components/TransactionItem'
 import { DonutChart, type Slice } from '@/components/charts/DonutChart'
@@ -18,6 +20,7 @@ import {
 const MAX_SLICES = 6
 
 export function History() {
+  const navigate = useNavigate()
   // Sin esto la lista no se refrescaba al borrar un movimiento.
   useData()
   const [month, setMonth] = useState(monthKey())
@@ -102,30 +105,52 @@ export function History() {
               const cat = getCategory(s.id)
               const isSel = selected === s.id
               return (
-                <button
+                <div
                   key={s.id}
-                  onClick={() => setSelected(isSel ? null : s.id)}
-                  aria-pressed={isSel}
-                  className={`flex items-center gap-3 rounded-lg px-1.5 py-1.5 text-left transition ${
-                    isSel ? 'bg-muted' : 'active:bg-muted/50'
+                  className={`flex items-center rounded-lg transition ${
+                    isSel ? 'bg-muted' : ''
                   } ${selected !== null && !isSel ? 'opacity-45' : ''}`}
                 >
-                  {cat ? (
-                    <CategoryIcon category={cat} size="sm" />
-                  ) : (
-                    <span
-                      className="h-8 w-8 shrink-0 rounded-lg"
-                      style={{ backgroundColor: `${s.color}26` }}
-                    />
-                  )}
-                  <span className="flex-1 truncate text-sm font-medium">{s.label}</span>
-                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                    {formatMoney(s.value)}
-                    <span className="ml-1.5 text-xs opacity-70">
-                      {Math.round((s.value / referencia) * 100)}%
+                  <button
+                    onClick={() => setSelected(isSel ? null : s.id)}
+                    aria-pressed={isSel}
+                    className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1.5 text-left ${
+                      isSel ? '' : 'active:bg-muted/50'
+                    }`}
+                  >
+                    {cat ? (
+                      <CategoryIcon category={cat} size="sm" />
+                    ) : (
+                      <span
+                        className="h-8 w-8 shrink-0 rounded-lg"
+                        style={{ backgroundColor: `${s.color}26` }}
+                      />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.label}</span>
+                    <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                      {formatMoney(s.value)}
+                      <span className="ml-1.5 text-xs opacity-70">
+                        {Math.round((s.value / referencia) * 100)}%
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                  {/*
+                    El tap de la fila ya está tomado: filtra la dona, que es lo
+                    que la dona promete. La navegación al detalle necesita su
+                    propio objetivo, y solo aparece en la fila elegida para no
+                    llenar la leyenda de chevrones. «Otros» no navega: agrupa
+                    varias categorías y no tiene página propia.
+                  */}
+                  {isSel && cat && (
+                    <button
+                      onClick={() => navigate(`/categoria/${cat.id}?mes=${month}`)}
+                      aria-label={`Ver el detalle de ${cat.name}`}
+                      className="mr-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition active:bg-background"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  )}
+                </div>
               )
             })}
           </div>
