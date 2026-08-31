@@ -141,9 +141,16 @@ export function Welcome() {
             ))}
           </div>
 
-          <Button onClick={empezar} className="h-12">
-            Empezar
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button onClick={empezar} className="h-12">
+              Empezar
+            </Button>
+            {/* `valor`/`saldos` viven en el componente, no en el paso: volver
+                no pierde lo tipeado en ninguno de los dos pasos. */}
+            <Button variant="ghost" onClick={() => setStep('budget')}>
+              Atrás
+            </Button>
+          </div>
         </section>
       )}
     </div>

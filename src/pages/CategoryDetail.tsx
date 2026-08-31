@@ -124,7 +124,7 @@ function Cabecera({ category }: { category: Category }) {
         </p>
       </div>
       <Link
-        to="/categorias"
+        to={`/categorias?editar=${category.id}`}
         aria-label={`Editar ${category.name}`}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted"
       >
@@ -175,7 +175,10 @@ function ResumenDelMes({
       <div className="border-t border-border pt-4">
         <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3">
           <p className="text-xs text-muted-foreground">Sin presupuesto para esta categoría.</p>
-          <Link to="/categorias" className="shrink-0 text-xs font-medium text-primary">
+          <Link
+            to={`/categorias?editar=${category.id}`}
+            className="shrink-0 text-xs font-medium text-primary"
+          >
             Definir
           </Link>
         </div>

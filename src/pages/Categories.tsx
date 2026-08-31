@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, Pencil, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,8 +19,11 @@ const COLORS = [
 
 export function Categories() {
   const { categories } = useData()
+  const [searchParams] = useSearchParams()
   const [creating, setCreating] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // `?editar=<id>` abre la edición de esa categoría de una: quien llega desde
+  // el lápiz de CategoryDetail no tiene que buscarla y tocarla de nuevo acá.
+  const [editingId, setEditingId] = useState<string | null>(() => searchParams.get('editar'))
 
   const expenses = categories.filter((c) => c.type === 'expense')
   const incomes = categories.filter((c) => c.type === 'income')
