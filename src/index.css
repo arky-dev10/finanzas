@@ -11,31 +11,33 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Paleta Kumi, muestreada del logo (assets/brand/kumi-logo.png): crema de
+     fondo, tinta azul oscura como texto/primario, verde salvia como acento. */
+  --background: #faf7f2;
+  --foreground: #1e222e;
+  --card: #fffefb;
+  --card-foreground: #1e222e;
+  --popover: #fffefb;
+  --popover-foreground: #1e222e;
+  --primary: #1e222e;
+  --primary-foreground: #faf7f2;
+  --secondary: #f1efe9;
+  --secondary-foreground: #1e222e;
+  --muted: #efece4;
+  --muted-foreground: #5c5a52;
+  --accent: #7f9d81;
+  --accent-foreground: #1e222e;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: #e6e2d9;
+  --input: #e6e2d9;
+  --ring: #7f9d81;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --page: oklch(0.977 0.002 247);
+  --page: #faf7f2;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -146,7 +148,7 @@ body {
 
 /* Marco tipo teléfono + PWA */
 body {
-  background: #e2e8f0;
+  background: #ece7de;
 }
 
 #root {
@@ -155,16 +157,16 @@ body {
   min-height: 100svh;
   background: var(--page);
   position: relative;
-  box-shadow: 0 0 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 0 40px rgba(30, 34, 46, 0.08);
 }
 
-/* Tarjeta blanca sobre el fondo gris de la página */
+/* Tarjeta blanca sobre el crema de la página */
 .surface {
   background: var(--card);
   border-radius: 1.15rem;
   box-shadow:
-    0 1px 2px rgb(15 23 42 / 0.04),
-    0 1px 3px rgb(15 23 42 / 0.06);
+    0 1px 2px rgb(30 34 46 / 0.04),
+    0 1px 3px rgb(30 34 46 / 0.06);
 }
 .pb-nav {
   /* barra inferior (4.5rem) + alto del FAB flotante, para que no tape la última fila */

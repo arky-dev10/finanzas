@@ -1,4 +1,4 @@
-# Finanzas — App de registro de gastos personales
+# Kumi — App de registro de gastos personales
 
 App PWA para llevar el control de **gastos e ingresos mensuales por categorías**.
 Enfocada en ser **rápida de registrar**, **fácil de leer de un vistazo** y **funcional offline**.
@@ -105,7 +105,7 @@ src/
     └── Settings.tsx         # Instalar app + presupuesto mensual + respaldo JSON
 scripts/
 ├── apple-splash.ts          # Lista de pantallas iOS (la usan el generador y vite.config)
-└── generate-icons.ts        # Marca "S/" → íconos, maskable, apple-touch, splashes
+└── generate-icons.ts        # Logo de Kumi → íconos, maskable, apple-touch, splashes
 ```
 
 ### Modelo de datos
@@ -203,20 +203,23 @@ La app es instalable de verdad, no un acceso directo. Verificado en build de
 producción: Chrome dispara `beforeinstallprompt` (solo lo hace si se cumplen
 **todos** los criterios), y matando el servidor `/historial` sigue cargando.
 
-**La marca vive en código**, no en un SVG suelto: `scripts/generate-icons.ts`
-dibuja la "S/" con dos arcos y una recta (sin fuentes, así que el render es
-igual en cualquier máquina) y de ahí salen todos los tamaños. Correr
-`npm run icons` solo si cambia la marca; los PNG van commiteados.
+**La marca vive en un solo PNG fuente**, no en código ni en SVGs sueltos:
+`assets/brand/kumi-logo.png` (el perrito dormido abrazando el gráfico) y
+`scripts/generate-icons.ts` deriva de ahí todos los tamaños con `sharp`.
+Correr `npm run icons` solo si cambia el PNG fuente; los PNG van commiteados.
 
-Cada variante existe por un motivo concreto:
+El PNG fuente ya trae sus propias esquinas redondeadas y fondo crema
+horneados (exportado como ícono de app clásico, con margen transparente
+alrededor). El generador recorta ese margen una vez (`loadMark`) y arma cada
+variante distinta a partir de la misma marca:
 
 | Archivo | Por qué |
 |---|---|
-| `pwa-64/192/512` | Ícono normal, con esquinas redondeadas propias |
-| `maskable-icon-512` | Cuadrado a sangre, marca al 62%: Android recorta en círculo y le comería un pedazo |
-| `apple-touch-icon-180` | Sin redondear: iOS aplica su propia máscara y quedaría doble |
-| `apple-splash-*` (14) | Sin esto, abrir desde la pantalla de inicio en iOS muestra un rectángulo blanco |
-| `screenshots/*` | Sin ellas Chrome usa el diálogo de instalación mínimo en vez de la ficha rica |
+| `pwa-64/192/512` | Ícono normal: se reusan las esquinas redondeadas que ya trae el PNG fuente |
+| `maskable-icon-512` | Cuadrado a sangre, marca al 62% sobre el mismo crema exacto del logo (`#faf7f2`): Android recorta en círculo y le comería un pedazo. Al ser el mismo tono, el margen y las esquinas redondeadas del recorte se funden con el fondo y no se ven |
+| `apple-touch-icon-180` | Mismo truco del crema a sangre, sin redondear por separado: iOS aplica su propia máscara y quedaría doble |
+| `apple-splash-*` (14) | Fondo crema plano + el logo centrado. Sin esto, abrir desde la pantalla de inicio en iOS muestra un rectángulo blanco; con el mismo crema del `--page` real, el salto entre el splash y la app cargada es invisible |
+| `screenshots/*` | Sin ellas Chrome usa el diálogo de instalación mínimo en vez de la ficha rica. **Pendiente**: quedaron con el look anterior a este rebrand, hay que recapturarlas cuando los 4 frentes de "marca Kumi" estén mergeados |
 
 **Actualizaciones: `prompt`, no `autoUpdate`.** Recargar en silencio a mitad de
 "Registrar movimiento" te borra lo escrito. `PwaUpdater` avisa por toast y el
