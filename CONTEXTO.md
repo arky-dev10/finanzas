@@ -60,10 +60,13 @@ pasaste, la barra se llena al 100% y el exceso se dice con el monto:
 - **lucide-react** (iconos) · **react-router-dom** · **sonner** (toasts con "Deshacer")
 - **vite-plugin-pwa** — service worker + manifest (`generateSW`, modo `prompt`)
 - **sharp** (solo dev) — genera íconos y splashes desde `scripts/`
+- **vitest** (solo dev) — tests del modelo (`src/lib/*.test.ts`), con `vitest.config.ts`
+  propio para no arrastrar React ni el plugin de PWA a los tests
 
 ```bash
 npm run dev       # desarrollo (PWA activa en dev)
 npm run build     # tsc -b && vite build + genera sw.js / manifest
+npm run test      # vitest run — modelo financiero (dinero, saldos, migración)
 npm run icons     # regenera íconos y splashes (solo si cambia la marca)
 npm run preview   # sirve el build para probar la PWA instalable
 npm run lint      # oxlint
@@ -77,15 +80,15 @@ npm run lint      # oxlint
 src/
 ├── main.tsx                 # Router + Toaster + AppLayout
 ├── index.css                # Tailwind + tokens shadcn + .surface + marco mobile
-├── types.ts                 # Category (con budget?), Transaction, TxType
+├── types.ts                 # Account, Category, Transaction, TxNature, Medium
 ├── lib/
 │   ├── pwa.ts               # useInstall(): prompt de instalación + detección standalone
-│   ├── format.ts            # dinero, meses, shiftMonth, sanitizeAmount
+│   ├── format.ts            # céntimos ↔ soles, meses, shiftMonth, sanitizeAmount
 │   ├── budget.ts            # estado de presupuesto (color + texto + icono) + tope por defecto
-│   ├── backup.ts            # serializar / validar JSON importado
+│   ├── backup.ts            # serializar / validar / MIGRAR el JSON importado
 │   ├── routes.ts            # hidesNav(): rutas de formulario sin barra inferior
 │   ├── icons.ts             # mapa nombre→icono lucide
-│   └── store.ts             # store local (useSyncExternalStore) + acciones
+│   └── store.ts             # store local (useSyncExternalStore) + acciones + saldos
 ├── components/
 │   ├── AppLayout.tsx        # Shell: <Outlet/> + BottomNav
 │   ├── PwaUpdater.tsx       # Registra el SW y avisa "hay versión nueva"
@@ -110,35 +113,80 @@ scripts/
 
 ### Modelo de datos
 
+El *porqué* de este modelo está en `docs/adr/0001-modelo-financiero.md`, y el
+vocabulario exacto (cuenta, medio, movimiento, naturaleza, saldo, «en cuentas»)
+en `CONTEXT.md`. Acá va solo la forma.
+
+**Toda la plata son céntimos enteros** (S/ 12.50 = `1250`). Los soles existen
+solo como el string que el usuario tipea: entran con `parseAmountToCents` y
+salen con `formatMoney`, que **recibe céntimos**. En el medio no hay decimales,
+así las comparaciones de presupuesto son exactas.
+
 ```ts
-type TxType = 'expense' | 'income'
+type AccountKind = 'bank' | 'cash'
+type Medium = 'yape' | 'plin' | 'card' | 'transfer' | 'other'
+type TxNature = 'expense' | 'income' | 'refund' | 'adjustment'
+type CategoryKind = 'expense' | 'income'
+
+// Donde vive la plata. Yape y Plin NO son cuentas: son medios.
+interface Account {
+  id: string
+  name: string
+  kind: AccountKind
+  balancePending?: true   // sin ajuste inicial: su saldo no es confiable
+  lastMedium?: Medium     // default recordado, se actualiza al registrar
+}
 
 interface Category {
   id: string
   name: string
-  icon: string      // nombre del icono lucide (ver lib/icons.ts)
-  color: string     // hex
-  type: TxType
-  budget?: number   // presupuesto mensual, solo gastos
+  icon: string       // nombre del icono lucide (ver lib/icons.ts)
+  color: string      // hex
+  type: CategoryKind
+  budget?: number    // presupuesto mensual EN CÉNTIMOS, solo gastos
 }
 
 interface Transaction {
   id: string
-  amount: number
-  categoryId: string
-  type: TxType
-  date: string      // YYYY-MM-DD
+  amountCents: number  // > 0 salvo adjustment, que lleva un delta con signo
+  nature: TxNature
+  accountId: string
+  categoryId?: string  // obligatorio salvo en adjustment
+  medium?: Medium      // nunca en cuentas cash
+  date: string         // YYYY-MM-DD
   note?: string
 }
 
 // lo que vive en localStorage y en el respaldo
 interface Data {
+  accounts: Account[]
   categories: Category[]
   transactions: Transaction[]
-  monthlyBudget: number   // tope de todo el mes; 0 = sin tope, sin valor por defecto
+  monthlyBudget: number   // tope de todo el mes EN CÉNTIMOS; 0 = sin tope
   onboarded: boolean      // si ya pasó por la bienvenida; NO va en el respaldo
 }
 ```
+
+### Dirección no es naturaleza
+
+«Todo dinero recibido es una entrada, pero no toda entrada es un ingreso.» De
+ahí salen dos aritméticas distintas, y confundirlas es el error clásico:
+
+| | **Saldo de cuenta** | **Análisis y presupuesto** |
+|---|---|---|
+| `income` | suma | ingreso del mes |
+| `expense` | resta | gasto del mes |
+| `refund` | suma | **resta del gasto** de su categoría, nunca suma a ingresos |
+| `adjustment` | suma su delta | **invisible** |
+
+La devolución pega en el **mes en que ocurre**, sin vínculo al gasto original y
+sin reescribir meses cerrados. Por eso el gasto neto de una categoría puede
+quedar en 0 o negativo: `expenseByCategory` lo devuelve tal cual y es la
+pantalla la que decide si eso se grafica.
+
+El ajuste es invisible para totales, presupuesto y gráficos, pero **es un
+movimiento real y se lista en el Historial**: calibra el saldo de una cuenta
+contra la realidad en vez de inventar un gasto o un ingreso para cuadrar.
 
 ### Store (`src/lib/store.ts`)
 
@@ -147,13 +195,25 @@ interface Data {
 - Estado global con `useSyncExternalStore`. **Toda pantalla que muestre datos debe llamar
   `useData()`** o no se entera de los cambios.
 - Acciones: `addTransaction`, `insertTransaction` (deshacer), `updateTransaction`,
-  `deleteTransaction`, `addCategory`, `updateCategory`, `deleteCategory` (devuelve lo
-  borrado), `restoreCategory`, `setMonthlyBudget`, `replaceData` (importar, devuelve lo previo).
+  `deleteTransaction`, `addAdjustment` (calibrar una cuenta), `addCategory`,
+  `updateCategory`, `deleteCategory` (devuelve lo borrado), `restoreCategory`,
+  `setMonthlyBudget`, `replaceData` (importar, devuelve lo previo).
 - Selectores: `transactionsByMonth`, `monthTotals`, `expenseByCategory`,
   `lastMonthsTotals`, `monthlyBudgetStatus` (tope global, `null` si no hay),
-  `budgetStatus` (por categoría), `balanceTrend`, `getCategory`, `getTransaction`.
-- El respaldo va por **`BACKUP_VERSION = 2`** (agregó `monthlyBudget`). Los archivos v1
-  se siguen importando: si no traen el campo, cae en `DEFAULT_MONTHLY_BUDGET`.
+  `budgetStatus` (por categoría), `balanceTrend`, `accountBalanceCents`,
+  `totalInAccounts`, `signedCents`, `getCategory`, `getAccount`, `getTransaction`.
+- **`totalInAccounts()`** devuelve `{ totalCents, reliable }` y es lo que el Resumen
+  muestra como «En cuentas» — *no* como «Disponible», que queda reservado para cuando
+  pueda descontar compromisos y deuda. Las cuentas con `balancePending` quedan **fuera
+  de la suma**: su saldo es desconocido, no cero, y sumarlas metería sus gastos sin su
+  saldo inicial. `reliable: false` avisa que falta calibrar alguna.
+- **`addAdjustment(accountId, targetBalanceCents, date?)`** anota el delta que falta para
+  llegar al saldo real y limpia `balancePending`. Si ya cuadraba no anota nada, pero igual
+  da el saldo por configurado: un «Ajuste S/ 0.00» en el historial sería ruido.
+- **`replaceData` copia campo por campo**: si algún día `Data` gana un campo nuevo, hay
+  que sumarlo ahí o importar un respaldo lo pierde en silencio.
+- El respaldo va por **`BACKUP_VERSION = 3`** (céntimos, cuentas y naturalezas). Los
+  archivos v1 y v2 se siguen importando y `parseData` los migra (ver abajo).
 
 ---
 
@@ -177,7 +237,7 @@ guardados, o importar un respaldo, significa que no sos nuevo.
 
 | Situación | Qué pasa |
 |---|---|
-| Ya venía usando la app (tiene `monthlyBudget: 3500` guardado) | No ve la bienvenida, **conserva su 3500** |
+| Ya venía usando la app (tenía `monthlyBudget: 3500` en soles) | No ve la bienvenida, **conserva su 3500**, migrado a `350000` céntimos |
 | Ya venía usando la app y había puesto el tope en 0 | No ve la bienvenida (no se le re-pregunta algo que ya decidió) |
 | localStorage vacío | Bienvenida |
 | localStorage corrupto | Bienvenida (`parseData` devuelve `null` → `initial()`) |
@@ -186,7 +246,23 @@ guardados, o importar un respaldo, significa que no sos nuevo.
 Verificado en el build de producción sembrando cada caso en `localStorage`.
 
 `onboarded` **no va en el respaldo**: `toBackup` lo omite a propósito porque es estado de la
-app, no plata. Por eso `BACKUP_VERSION` sigue en 2.
+app, no plata.
+
+### Migración a v3 (céntimos y cuentas)
+
+`parseData` no es solo un validador: también migra. Un respaldo v1/v2 entra con
+`amount` en soles y `type`, y sale con `amountCents`, `nature` y `accountId`. Todo el
+historial pre-cuentas se asigna a **BCP**, que queda con `balancePending` porque su saldo
+derivado es ficción hasta el primer ajuste; el ajuste inicial absorbe la diferencia, como
+una conciliación bancaria. El tope mensual y los presupuestos por categoría también pasan
+a céntimos.
+
+> **El detalle que no se puede romper**: el localStorage viejo no guardaba `version`, así
+> que no alcanza con mirar ese campo para saber si los datos ya están migrados — si nos
+> equivocamos, la plata del usuario se multiplica por 100 al abrir la app. Antes de asumir
+> que es v2, `looksMigrated()` mira la forma (¿hay `accounts`?, ¿hay `amountCents`?), y de
+> ahora en más el store **guarda `version` al persistir**. Lo cuida el test *"no vuelve a
+> multiplicar por 100 al releer lo que acaba de guardar"*.
 
 `resetData()` sí lo pone en `false`: "Borrar todo y empezar de cero" te devuelve a la
 bienvenida, y el "Deshacer" del toast restaura el flag y te trae de vuelta al Resumen.
