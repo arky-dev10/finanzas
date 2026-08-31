@@ -5,6 +5,7 @@ import './index.css'
 import { AppLayout } from '@/components/AppLayout'
 import { PwaUpdater } from '@/components/PwaUpdater'
 import { Toaster } from '@/components/ui/sonner'
+import { Accounts } from '@/pages/Accounts'
 import { Dashboard } from '@/pages/Dashboard'
 import { AddTransaction } from '@/pages/AddTransaction'
 import { Categories } from '@/pages/Categories'
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/registrar" element={<AddTransaction />} />
           <Route path="/registrar/:id" element={<AddTransaction />} />
           <Route path="/categorias" element={<Categories />} />
+          <Route path="/cuentas" element={<Accounts />} />
           <Route path="/historial" element={<History />} />
           <Route path="/ajustes" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
