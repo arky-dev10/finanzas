@@ -107,6 +107,24 @@ describe('parseData — datos inválidos', () => {
     expect(parseData({ categories: [], transactions: [{ id: 1 }] })).toBe(null)
   })
 
+  it('rechaza cuentas corruptas en vez de reemplazarlas por las semillas', () => {
+    // Sembrar por encima perdería las cuentas reales del usuario y dejaría
+    // todos sus movimientos apuntando a cuentas que ya no existen.
+    expect(
+      parseData({
+        version: 3,
+        accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'cripto' }],
+        categories: [],
+        transactions: [],
+      }),
+    ).toBe(null)
+  })
+
+  it('siembra cuentas si el respaldo no trae ninguna', () => {
+    const d = parseData({ version: 3, accounts: [], categories: [], transactions: [] })!
+    expect(d.accounts.map((a) => a.id)).toEqual(['a_bcp', 'a_cash'])
+  })
+
   it('rechaza un movimiento que no es ajuste y no tiene categoría', () => {
     expect(
       parseData({

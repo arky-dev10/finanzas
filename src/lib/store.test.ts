@@ -138,13 +138,29 @@ describe('accountBalanceCents', () => {
 })
 
 describe('totalInAccounts', () => {
-  it('suma los saldos de todas las cuentas', () => {
+  it('suma los saldos de todas las cuentas calibradas', () => {
+    // 294000 en BCP + 1000 en Efectivo
     expect(totalInAccounts()).toEqual({ totalCents: 295000, reliable: true })
   })
 
-  it('marca el total como no confiable si una cuenta tiene saldo pendiente', () => {
+  it('deja fuera de la suma a la cuenta con saldo pendiente', () => {
+    // Su saldo es DESCONOCIDO, no cero: sumarla mete sus gastos sin su saldo
+    // inicial y el total sale menor que la única cuenta que sí sabemos.
     sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true }, CUENTAS[1]] })
-    expect(totalInAccounts()).toEqual({ totalCents: 295000, reliable: false })
+    expect(totalInAccounts()).toEqual({ totalCents: 1000, reliable: false })
+  })
+
+  it('suma la cuenta completa apenas se la calibra', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true }, CUENTAS[1]] })
+    addAdjustment('a_bcp', 500000, '2026-08-25')
+    expect(totalInAccounts()).toEqual({ totalCents: 501000, reliable: true })
+  })
+
+  it('da 0 no confiable si ninguna cuenta está calibrada', () => {
+    // Es el estado justo después de migrar: BCP arrastra todo el historial
+    // pero todavía no sabemos cuánta plata hay ahí de verdad.
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true }] })
+    expect(totalInAccounts()).toEqual({ totalCents: 0, reliable: false })
   })
 })
 
@@ -175,6 +191,12 @@ describe('addAdjustment', () => {
     addAdjustment('a_bcp', 294000, '2026-08-25')
     expect(transactionsByMonth('2026-08').filter((t) => t.nature === 'adjustment')).toHaveLength(1)
     expect(getAccount('a_bcp')!.balancePending).toBeUndefined()
+  })
+
+  it('no anota nada contra una cuenta que no existe', () => {
+    // Sería un movimiento huérfano: no lo ve ningún saldo, pero se lista.
+    addAdjustment('a_nope', 50000, '2026-08-25')
+    expect(transactionsByMonth('2026-08').filter((t) => t.nature === 'adjustment')).toHaveLength(1)
   })
 
   it('no toca el gasto ni el ingreso del mes', () => {

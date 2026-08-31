@@ -186,16 +186,21 @@ export function accountBalanceCents(accountId: string): number {
 }
 
 /**
- * "En cuentas": la suma de todos los saldos. No es el Disponible — todavía no
- * descuenta compromisos ni deuda. `reliable` es false mientras alguna cuenta
- * siga sin su ajuste inicial: ahí el total es una cuenta a medias, no un saldo.
+ * "En cuentas": la suma de los saldos. No es el Disponible — todavía no
+ * descuenta compromisos ni deuda.
+ *
+ * Las cuentas sin ajuste inicial quedan FUERA de la suma: su saldo es
+ * desconocido, no cero. Sumarlas metería sus gastos sin su saldo inicial, y el
+ * total podría salir más chico que la única cuenta que sí conocemos — se lee
+ * como un error de suma. `reliable` avisa que falta calibrar alguna; al
+ * calibrarla, el ajuste absorbe la diferencia y la cuenta entra completa.
  */
 export function totalInAccounts(): { totalCents: number; reliable: boolean } {
   let totalCents = 0
   let reliable = true
   for (const a of data.accounts) {
-    totalCents += accountBalanceCents(a.id)
     if (a.balancePending) reliable = false
+    else totalCents += accountBalanceCents(a.id)
   }
   return { totalCents, reliable }
 }
@@ -207,6 +212,9 @@ export function totalInAccounts(): { totalCents: number; reliable: boolean } {
  * el saldo por configurado: un "Ajuste S/ 0.00" en el historial sería ruido.
  */
 export function addAdjustment(accountId: string, targetBalanceCents: number, date: string = todayISO()) {
+  // Sin cuenta el ajuste sería un movimiento huérfano: se listaría en el
+  // historial sin entrar en ningún saldo.
+  if (getAccount(accountId) === undefined) return
   const delta = targetBalanceCents - accountBalanceCents(accountId)
   const accounts = data.accounts.map((a) => {
     if (a.id !== accountId || a.balancePending === undefined) return a
