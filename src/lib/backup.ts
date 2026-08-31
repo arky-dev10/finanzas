@@ -37,17 +37,22 @@ export interface Data {
   onboarded: boolean
 }
 
-/**
- * BCP arranca con saldo pendiente porque su saldo derivado es ficción hasta el
- * primer ajuste: son los movimientos que el usuario anotó, no lo que hay en el
- * banco. Efectivo arranca en cero de verdad, sin movimientos que lo desmientan.
- */
 export const DEFAULT_ACCOUNT_ID = 'a_bcp'
 
+/**
+ * Las dos arrancan con el saldo pendiente de calibrar, porque no se conoce
+ * ninguno de los dos. El de BCP es ficción hasta el primer ajuste: son los
+ * movimientos que el usuario anotó, no lo que hay en el banco. Y el efectivo
+ * tampoco es cero — es la plata de la billetera, que nadie contó todavía.
+ *
+ * Sembrar Efectivo como calibrada dejaba `reliable` en true apenas se calibraba
+ * BCP, y el total se presentaba como exacto con la billetera afuera de la suma
+ * (ADR 0001, D6).
+ */
 export function seedAccounts(): Account[] {
   return [
     { id: DEFAULT_ACCOUNT_ID, name: 'BCP', kind: 'bank', balancePending: true },
-    { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+    { id: 'a_cash', name: 'Efectivo', kind: 'cash', balancePending: true },
   ]
 }
 

@@ -32,11 +32,13 @@ describe('parseData — migración de respaldos viejos', () => {
     expect(d.transactions.every((t) => t.accountId === 'a_bcp')).toBe(true)
   })
 
-  it('siembra BCP con saldo pendiente y Efectivo', () => {
+  it('siembra las dos cuentas con el saldo pendiente de calibrar', () => {
+    // Ninguna de las dos se conoce todavía: el saldo derivado de BCP es la
+    // resta de años de movimientos, y la plata de la billetera no la vio nadie.
     const d = parseData(v2)!
     expect(d.accounts).toEqual([
       { id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true },
-      { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+      { id: 'a_cash', name: 'Efectivo', kind: 'cash', balancePending: true },
     ])
   })
 
