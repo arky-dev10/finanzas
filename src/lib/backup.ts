@@ -148,6 +148,29 @@ function looksMigrated(o: Record<string, unknown>): boolean {
   )
 }
 
+/**
+ * Limpia estados que el modelo declara imposibles pero que un archivo importado
+ * puede traer igual. Limpiamos en vez de rechazar: son campos de más, no plata,
+ * y tirar todo el respaldo por eso sería desproporcionado.
+ *
+ * El medio no aplica en efectivo (la plata en mano no se mueve por un canal), y
+ * un ajuste con categoría es peligroso además de incoherente: `deleteCategory`
+ * borra los movimientos de la categoría, así que se llevaría puesta la
+ * calibración y el saldo de la cuenta se movería solo.
+ */
+function normalizeTransactions(transactions: Transaction[], accounts: Account[]): Transaction[] {
+  const cash = new Set(accounts.filter((a) => a.kind === 'cash').map((a) => a.id))
+  return transactions.map((t) => {
+    const sobraMedio = t.medium !== undefined && cash.has(t.accountId)
+    const sobraCategoria = t.nature === 'adjustment' && t.categoryId !== undefined
+    if (!sobraMedio && !sobraCategoria) return t
+    const limpio = { ...t }
+    if (sobraMedio) delete limpio.medium
+    if (sobraCategoria) delete limpio.categoryId
+    return limpio
+  })
+}
+
 function isBudget(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0
 }
@@ -192,7 +215,7 @@ export function parseData(raw: unknown): Data | null {
   return {
     accounts,
     categories,
-    transactions,
+    transactions: normalizeTransactions(transactions, accounts),
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
     // No inventamos un monto que el usuario no eligió.
     monthlyBudget: legacy ? Math.round(budget * 100) : budget,
