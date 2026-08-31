@@ -12,8 +12,7 @@ import { Categories } from '@/pages/Categories'
 import { History } from '@/pages/History'
 import { Settings } from '@/pages/Settings'
 import { Welcome } from '@/pages/Welcome'
-// TODO(finanzas-c2): activar cuando src/pages/CategoryDetail.tsx exista en main.
-// import { CategoryDetail } from '@/pages/CategoryDetail'
+import { CategoryDetail } from '@/pages/CategoryDetail'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -26,8 +25,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/registrar" element={<AddTransaction />} />
           <Route path="/registrar/:id" element={<AddTransaction />} />
           <Route path="/categorias" element={<Categories />} />
-          {/* TODO(finanzas-c2): descomentar junto con el import de arriba. */}
-          {/* <Route path="/categoria/:id" element={<CategoryDetail />} /> */}
+          <Route path="/categoria/:id" element={<CategoryDetail />} />
           <Route path="/cuentas" element={<Accounts />} />
           <Route path="/historial" element={<History />} />
           <Route path="/ajustes" element={<Settings />} />
