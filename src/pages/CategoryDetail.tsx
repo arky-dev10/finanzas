@@ -210,8 +210,8 @@ function ResumenDelMes({
         </span>
         <span className="tabular-nums text-muted-foreground">
           {status.over
-            ? `· ${formatMoney(status.spent - status.budget)} de más`
-            : `· quedan ${formatMoney(status.budget - status.spent)} de ${formatMoney(status.budget)}`}
+            ? `· ${formatMoney(status.spentCents - status.budgetCents)} de más`
+            : `· quedan ${formatMoney(status.budgetCents - status.spentCents)} de ${formatMoney(status.budgetCents)}`}
         </span>
       </p>
     </div>
