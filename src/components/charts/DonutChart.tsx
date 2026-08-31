@@ -1,5 +1,4 @@
-// FASE A: formatMoney recibe céntimos. FASE B: cambiar a '@/lib/format'.
-import { formatMoney } from '@/preview-fase-a'
+import { formatMoney } from '@/lib/format'
 
 export interface Slice {
   id: string

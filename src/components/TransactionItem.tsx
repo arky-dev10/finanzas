@@ -2,18 +2,9 @@ import { Scale, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/CategoryIcon'
-import { shortDate } from '@/lib/format'
-// FASE A: andamio con el contrato del modelo nuevo.
-// FASE B: formatMoney → '@/lib/format'; el resto → '@/lib/store' y '@/types'.
-import {
-  deleteTransaction,
-  formatMoney,
-  getAccount,
-  getCategory,
-  insertTransaction,
-  type Medium,
-  type Transaction,
-} from '@/preview-fase-a'
+import { formatMoney, shortDate } from '@/lib/format'
+import { deleteTransaction, getAccount, getCategory, insertTransaction } from '@/lib/store'
+import type { Medium, Transaction } from '@/types'
 
 const MEDIOS: Record<Medium, string> = {
   yape: 'Yape',

@@ -15,24 +15,20 @@ import { MonthNav } from '@/components/MonthNav'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
-import { monthKey, monthLabel, shiftMonth } from '@/lib/format'
-// FASE A: andamio con el contrato del modelo nuevo.
-// FASE B: formatMoney → '@/lib/format'; el resto → '@/lib/store' y '@/types'.
+import { formatMoney, monthKey, monthLabel, shiftMonth } from '@/lib/format'
 import {
   accountBalanceCents,
   budgetStatus,
   expenseByCategory,
-  formatMoney,
   getCategory,
   monthlyBudgetStatus,
   monthTotals,
   totalInAccounts,
   transactionsByMonth,
   useData,
-  type Account,
-  type Category,
   type MonthlyBudgetStatus,
-} from '@/preview-fase-a'
+} from '@/lib/store'
+import type { Account, Category } from '@/types'
 
 const TOP = 3
 const RECENT = 5

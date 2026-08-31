@@ -4,18 +4,15 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { DonutChart, type Slice } from '@/components/charts/DonutChart'
 import { MonthlyBars } from '@/components/charts/MonthlyBars'
 import { CategoryIcon } from '@/components/CategoryIcon'
-import { monthKey } from '@/lib/format'
-// FASE A: andamio con el contrato del modelo nuevo.
-// FASE B: formatMoney → '@/lib/format'; el resto → '@/lib/store' y '@/types'.
+import { formatMoney, monthKey } from '@/lib/format'
 import {
   expenseByCategory,
-  formatMoney,
   getCategory,
   lastMonthsTotals,
   monthTotals,
   transactionsByMonth,
   useData,
-} from '@/preview-fase-a'
+} from '@/lib/store'
 
 /** Más de 6 porciones se vuelven ilegibles: el resto se agrupa en "Otros". */
 const MAX_SLICES = 6
