@@ -30,7 +30,7 @@ export interface Category {
   color: string
   type: CategoryKind
   /** Presupuesto mensual en céntimos (solo tiene sentido en categorías de gasto) */
-  budget?: number
+  budgetCents?: number
 }
 
 export interface Transaction {

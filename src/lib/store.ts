@@ -44,7 +44,7 @@ function initial(): Data {
     accounts: seedAccounts(),
     categories: DEFAULT_CATEGORIES,
     transactions: [],
-    monthlyBudget: 0,
+    monthlyBudgetCents: 0,
     onboarded: false,
   }
 }
@@ -103,7 +103,7 @@ export function replaceData(next: Data): Data {
     accounts: next.accounts,
     categories: next.categories,
     transactions: next.transactions,
-    monthlyBudget: next.monthlyBudget,
+    monthlyBudgetCents: next.monthlyBudgetCents,
     onboarded: next.onboarded,
   })
   return previo
@@ -280,13 +280,13 @@ export function restoreCategory(category: Category, transactions: Transaction[])
 /* ---------- tope mensual ---------- */
 
 /** Cambia el tope de gasto de todo el mes, en céntimos. 0 lo desactiva. */
-export function setMonthlyBudget(cents: number) {
-  commit({ ...data, monthlyBudget: Math.max(0, cents) })
+export function setMonthlyBudgetCents(cents: number) {
+  commit({ ...data, monthlyBudgetCents: Math.max(0, cents) })
 }
 
 /** Cierra la bienvenida. `cents` en 0 = "definirlo después". */
 export function completeOnboarding(cents: number) {
-  commit({ ...data, monthlyBudget: Math.max(0, cents), onboarded: true })
+  commit({ ...data, monthlyBudgetCents: Math.max(0, cents), onboarded: true })
 }
 
 /* ---------- selectores ---------- */
@@ -342,31 +342,19 @@ export function lastMonthsTotals(count: number, endMonth: string = monthKey()) {
 }
 
 /**
- * Variación del balance contra el mes anterior.
- * Solo tiene sentido si el mes anterior fue positivo: si fue 0 o negativo,
- * el porcentaje no significa nada y devolvemos null para no mostrarlo.
- */
-export function balanceTrend(month: string) {
-  const actual = monthTotals(month).balance
-  const previo = monthTotals(shiftMonth(month, -1)).balance
-  if (previo <= 0) return null
-  return { pct: Math.round(((actual - previo) / previo) * 100), previo: shiftMonth(month, -1) }
-}
-
-/**
  * Avance del tope global del mes: cuánto del presupuesto total ya se gastó.
  * Devuelve null si no hay tope definido, para que la UI simplemente no lo muestre.
  */
 export function monthlyBudgetStatus(month: string) {
-  const budget = data.monthlyBudget
-  if (budget <= 0) return null
-  const spent = monthTotals(month).expense
+  const budgetCents = data.monthlyBudgetCents
+  if (budgetCents <= 0) return null
+  const spentCents = monthTotals(month).expense
   return {
-    budget,
-    spent,
-    remaining: budget - spent,
-    pct: spent / budget,
-    over: spent > budget,
+    budgetCents,
+    spentCents,
+    remainingCents: budgetCents - spentCents,
+    pct: spentCents / budgetCents,
+    over: spentCents > budgetCents,
   }
 }
 
@@ -376,16 +364,16 @@ export type MonthlyBudgetStatus = NonNullable<ReturnType<typeof monthlyBudgetSta
 export function budgetStatus(month: string) {
   const spent = new Map(expenseByCategory(month).map((e) => [e.categoryId, e.total]))
   return data.categories
-    .filter((c) => c.type === 'expense' && typeof c.budget === 'number' && c.budget > 0)
+    .filter((c) => c.type === 'expense' && typeof c.budgetCents === 'number' && c.budgetCents > 0)
     .map((category) => {
-      const budget = category.budget as number
-      const used = spent.get(category.id) ?? 0
+      const budgetCents = category.budgetCents as number
+      const spentCents = spent.get(category.id) ?? 0
       return {
         category,
-        budget,
-        spent: used,
-        pct: used / budget,
-        over: used > budget,
+        budgetCents,
+        spentCents,
+        pct: spentCents / budgetCents,
+        over: spentCents > budgetCents,
       }
     })
     .sort((a, b) => b.pct - a.pct)

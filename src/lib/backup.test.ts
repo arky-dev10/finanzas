@@ -42,8 +42,8 @@ describe('parseData — migración de respaldos viejos', () => {
 
   it('pasa el tope mensual y los presupuestos por categoría a céntimos', () => {
     const d = parseData(v2)!
-    expect(d.monthlyBudget).toBe(350000)
-    expect(d.categories.find((c) => c.id === 'c_food')!.budget).toBe(50000)
+    expect(d.monthlyBudgetCents).toBe(350000)
+    expect(d.categories.find((c) => c.id === 'c_food')!.budgetCents).toBe(50000)
   })
 
   it('conserva nota y fecha', () => {
@@ -55,7 +55,7 @@ describe('parseData — migración de respaldos viejos', () => {
   it('importa respaldos v1, que no traían tope mensual', () => {
     const { monthlyBudget: _mb, version: _v, ...v1 } = v2
     const d = parseData({ ...v1, version: 1 })!
-    expect(d.monthlyBudget).toBe(0)
+    expect(d.monthlyBudgetCents).toBe(0)
     expect(d.transactions).toHaveLength(2)
   })
 
@@ -63,7 +63,7 @@ describe('parseData — migración de respaldos viejos', () => {
     const { version: _v, exportedAt: _e, ...crudo } = v2
     const d = parseData({ ...crudo, onboarded: true })!
     expect(d.transactions[0].amountCents).toBe(1250)
-    expect(d.monthlyBudget).toBe(350000)
+    expect(d.monthlyBudgetCents).toBe(350000)
   })
 })
 
@@ -72,7 +72,7 @@ describe('parseData — datos ya migrados', () => {
     const migrado = parseData(v2)!
     const releido = parseData(JSON.parse(serialize(migrado)))!
     expect(releido.transactions.map((t) => t.amountCents)).toEqual([1250, 300000])
-    expect(releido.monthlyBudget).toBe(350000)
+    expect(releido.monthlyBudgetCents).toBe(350000)
     expect(releido.accounts).toEqual(migrado.accounts)
   })
 
@@ -99,6 +99,32 @@ describe('parseData — datos ya migrados', () => {
     expect(d.accounts).toHaveLength(2)
     expect(d.transactions[0].amountCents).toBe(-500)
     expect(d.transactions[1].medium).toBe('yape')
+  })
+})
+
+describe('parseData — respaldos v3, que usaban los nombres sin sufijo', () => {
+  const v3 = {
+    version: 3,
+    monthlyBudget: 350000,
+    accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }],
+    categories: [
+      { id: 'c_food', name: 'Comida', icon: 'utensils', color: '#eb6834', type: 'expense', budget: 50000 },
+    ],
+    transactions: [
+      { id: 't1', amountCents: 1250, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-10' },
+    ],
+  }
+
+  it('lee los montos donde estaban, sin volver a multiplicar por 100', () => {
+    // v3 ya guardaba céntimos: solo cambió el nombre del campo.
+    const d = parseData(v3)!
+    expect(d.monthlyBudgetCents).toBe(350000)
+    expect(d.categories[0].budgetCents).toBe(50000)
+  })
+
+  it('no deja el nombre viejo colgando en los datos migrados', () => {
+    const d = parseData(v3)!
+    expect('budget' in d.categories[0]).toBe(false)
   })
 })
 
@@ -179,7 +205,8 @@ describe('respaldo exportado', () => {
   it('sale en la versión actual y con las cuentas', () => {
     const b = toBackup(parseData(v2)!)
     expect(b.version).toBe(BACKUP_VERSION)
-    expect(BACKUP_VERSION).toBe(3)
+    expect(BACKUP_VERSION).toBe(4)
+    expect(b.monthlyBudgetCents).toBe(350000)
     expect(b.accounts).toHaveLength(2)
   })
 

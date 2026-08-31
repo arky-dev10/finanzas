@@ -1,15 +1,23 @@
 import type { Account, Category, Medium, Transaction, TxNature } from '@/types'
 
 /**
+ * v4: `budget` y `monthlyBudget` pasan a `budgetCents`/`monthlyBudgetCents`.
  * v3: montos en céntimos, cuentas y naturalezas (ADR 0001).
- * v2 agregó `monthlyBudget`. Los respaldos v1 y v2 se siguen importando.
+ * v2 agregó `monthlyBudget`. Todos se siguen importando.
  */
-export const BACKUP_VERSION = 3
+export const BACKUP_VERSION = 4
+
+/**
+ * Desde v3 los montos YA vienen en céntimos. Ojo: la migración se decide contra
+ * esta constante y no contra `BACKUP_VERSION`, porque cada versión nueva que no
+ * cambie la unidad volvería a multiplicar por 100 la plata del usuario.
+ */
+const CENTS_SINCE = 3
 
 export interface Backup {
   version: number
   exportedAt: string
-  monthlyBudget: number
+  monthlyBudgetCents: number
   accounts: Account[]
   categories: Category[]
   transactions: Transaction[]
@@ -20,7 +28,7 @@ export interface Data {
   categories: Category[]
   transactions: Transaction[]
   /** Tope de gasto de todo el mes, en céntimos. 0 = sin tope. */
-  monthlyBudget: number
+  monthlyBudgetCents: number
   /**
    * Si ya pasó por la pantalla de bienvenida. No va en el respaldo: es estado
    * de la app, no plata. Sin esto, quien elige "Definirlo después" volvería a
@@ -58,17 +66,42 @@ function isAccount(v: unknown): v is Account {
   )
 }
 
-function isCategory(v: unknown): v is Category {
+const isAmount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** El presupuesto se llamaba `budget` hasta v3; desde v4 es `budgetCents`. */
+function rawBudget(c: Record<string, unknown>): unknown {
+  return c.budgetCents ?? c.budget
+}
+
+function isCategoryShape(v: unknown): v is Record<string, unknown> {
   if (typeof v !== 'object' || v === null) return false
   const c = v as Record<string, unknown>
+  const budget = rawBudget(c)
   return (
     typeof c.id === 'string' &&
     typeof c.name === 'string' &&
     typeof c.icon === 'string' &&
     typeof c.color === 'string' &&
     (c.type === 'expense' || c.type === 'income') &&
-    (c.budget === undefined || (typeof c.budget === 'number' && Number.isFinite(c.budget)))
+    (budget === undefined || isAmount(budget))
   )
+}
+
+/**
+ * Reconstruye la categoría en vez de copiarla: así el `budget` viejo no queda
+ * colgando al lado del `budgetCents` nuevo en el localStorage del usuario.
+ */
+function toCategory(raw: Record<string, unknown>, legacy: boolean): Category {
+  const cat: Category = {
+    id: raw.id as string,
+    name: raw.name as string,
+    icon: raw.icon as string,
+    color: raw.color as string,
+    type: raw.type as Category['type'],
+  }
+  const budget = rawBudget(raw)
+  if (isAmount(budget)) cat.budgetCents = legacy ? Math.round(budget * 100) : budget
+  return cat
 }
 
 const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
@@ -131,10 +164,6 @@ function migrateTransaction(t: LegacyTransaction): Transaction {
   }
 }
 
-function migrateCategory(c: Category): Category {
-  return c.budget === undefined ? c : { ...c, budget: Math.round(c.budget * 100) }
-}
-
 /**
  * El localStorage viejo no guardaba `version`. Antes de asumir que es v2 y
  * multiplicar todo por 100, miramos la forma: si ya hay cuentas o `amountCents`,
@@ -171,8 +200,11 @@ function normalizeTransactions(transactions: Transaction[], accounts: Account[])
   })
 }
 
-function isBudget(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v) && v >= 0
+/** El tope se llamaba `monthlyBudget` hasta v3; desde v4 es `monthlyBudgetCents`. */
+function readMonthlyBudget(o: Record<string, unknown>, legacy: boolean): number {
+  const raw = o.monthlyBudgetCents ?? o.monthlyBudget
+  if (!isAmount(raw) || raw < 0) return 0
+  return legacy ? Math.round(raw * 100) : raw
 }
 
 /**
@@ -184,24 +216,20 @@ export function parseData(raw: unknown): Data | null {
   if (typeof raw !== 'object' || raw === null) return null
   const o = raw as Record<string, unknown>
   if (!Array.isArray(o.categories) || !Array.isArray(o.transactions)) return null
-  if (!o.categories.every(isCategory)) return null
+  if (!o.categories.every(isCategoryShape)) return null
 
   const version = typeof o.version === 'number' ? o.version : looksMigrated(o) ? BACKUP_VERSION : 1
-  const legacy = version < BACKUP_VERSION
+  const legacy = version < CENTS_SINCE
 
   let transactions: Transaction[]
-  let categories: Category[]
   if (legacy) {
     if (!o.transactions.every(isLegacyTransaction)) return null
     transactions = o.transactions.map(migrateTransaction)
-    categories = o.categories.map(migrateCategory)
   } else {
     if (!o.transactions.every(isTransaction)) return null
     transactions = o.transactions
-    categories = o.categories
   }
-
-  const budget = isBudget(o.monthlyBudget) ? o.monthlyBudget : 0
+  const categories = o.categories.map((c) => toCategory(c, legacy))
 
   // Sin cuentas no hay dónde poner los movimientos, así que sembramos; pero si
   // vienen y están corruptas rechazamos todo, como con las categorías: pisarlas
@@ -218,7 +246,7 @@ export function parseData(raw: unknown): Data | null {
     transactions: normalizeTransactions(transactions, accounts),
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
     // No inventamos un monto que el usuario no eligió.
-    monthlyBudget: legacy ? Math.round(budget * 100) : budget,
+    monthlyBudgetCents: readMonthlyBudget(o, legacy),
     // Tener datos guardados (o importar un respaldo) significa que no sos nuevo.
     onboarded: typeof o.onboarded === 'boolean' ? o.onboarded : true,
   }
@@ -228,7 +256,7 @@ export function toBackup(data: Data): Backup {
   return {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    monthlyBudget: data.monthlyBudget,
+    monthlyBudgetCents: data.monthlyBudgetCents,
     accounts: data.accounts,
     categories: data.categories,
     transactions: data.transactions,
