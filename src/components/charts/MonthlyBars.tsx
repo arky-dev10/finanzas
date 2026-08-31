@@ -9,9 +9,11 @@ export interface MonthPoint {
 /** Ingreso y gasto comparten escala (soles), así que van en un solo eje. */
 const INCOME = '#008300'
 const EXPENSE = '#e34948'
-/** Mismo azul que el "Ver todo"/"Ver todas" del Resumen e Historial: tono
- *  informativo, no del semáforo de presupuesto (verde/ámbar/rojo). */
-export const REFUND = '#2a78d6'
+/** Mismo azul de devolución que TransactionItem.tsx (`DEVOLUCION`): un
+ *  movimiento con esa naturaleza tiene que verse igual en toda la app, sea
+ *  en una fila del historial o acá. No es del semáforo de presupuesto
+ *  (verde/ámbar/rojo) ni de un estado de error. */
+export const REFUND = '#1f6c9f'
 const H = 96
 
 /**

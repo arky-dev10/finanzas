@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, ChevronLeft, Pencil, Undo2 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { CategoryMonthlyBars, REFUND } from '@/components/charts/MonthlyBars'
 import { MonthNav } from '@/components/MonthNav'
@@ -32,11 +32,18 @@ function categoryTotal(month: string, categoryId: string, kind: CategoryKind): n
   return total
 }
 
+const MES_RE = /^\d{4}-\d{2}$/
+
 export function CategoryDetail() {
   const { id = '' } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   useData()
   const category = getCategory(id)
-  const [month, setMonth] = useState(monthKey())
+  // Quien enlaza acá desde un mes específico (la fila de una categoría en un
+  // mes pasado del Historial, por ejemplo) puede pasar `?mes=YYYY-MM` para
+  // abrir directo en ese mes en vez de saltar siempre al mes actual.
+  const mesParam = searchParams.get('mes')
+  const [month, setMonth] = useState(mesParam && MES_RE.test(mesParam) ? mesParam : monthKey())
 
   if (!category) return <CategoriaNoEncontrada />
 
