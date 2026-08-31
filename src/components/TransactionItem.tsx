@@ -2,6 +2,7 @@ import { Scale, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/CategoryIcon'
+import { DEVOLUCION } from '@/components/colors'
 import { formatMoney, shortDate } from '@/lib/format'
 import {
   deleteTransaction,
@@ -19,13 +20,6 @@ const MEDIOS: Record<Medium, string> = {
   transfer: 'Transferencia',
   other: 'Otro',
 }
-
-/**
- * Azul de devolución: ni el verde de ingreso (no es plata nueva) ni el tono de
- * gasto (no salió plata). Va siempre con la palabra «Devolución» en la línea de
- * detalle: el color nunca es lo único que lo dice.
- */
-const DEVOLUCION = '#1f6c9f'
 
 /**
  * Una fila del historial. La naturaleza se lee de tres formas a la vez —signo,

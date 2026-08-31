@@ -2,7 +2,8 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, Pencil, Undo2 } from 'lucide-
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CategoryIcon } from '@/components/CategoryIcon'
-import { CategoryMonthlyBars, REFUND } from '@/components/charts/MonthlyBars'
+import { CategoryMonthlyBars } from '@/components/charts/MonthlyBars'
+import { DEVOLUCION } from '@/components/colors'
 import { MonthNav } from '@/components/MonthNav'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
@@ -68,7 +69,7 @@ export function CategoryDetail() {
           </span>
           <span
             className="text-3xl font-bold leading-none tracking-tight tabular-nums"
-            style={{ color: spent < 0 ? REFUND : undefined }}
+            style={{ color: spent < 0 ? DEVOLUCION : undefined }}
           >
             {formatMoney(spent)}
           </span>
@@ -156,9 +157,9 @@ function ResumenDelMes({
   if (spent < 0) {
     return (
       <div className="border-t border-border pt-4">
-        <div className="flex items-start gap-2.5 rounded-xl p-3" style={{ backgroundColor: `${REFUND}14` }}>
-          <Undo2 size={16} className="mt-0.5 shrink-0" style={{ color: REFUND }} />
-          <p className="text-xs leading-relaxed" style={{ color: REFUND }}>
+        <div className="flex items-start gap-2.5 rounded-xl p-3" style={{ backgroundColor: `${DEVOLUCION}14` }}>
+          <Undo2 size={16} className="mt-0.5 shrink-0" style={{ color: DEVOLUCION }} />
+          <p className="text-xs leading-relaxed" style={{ color: DEVOLUCION }}>
             Te devolvieron <span className="font-semibold">{formatMoney(-spent)}</span> más de lo
             que gastaste en {category.name} este mes.
           </p>

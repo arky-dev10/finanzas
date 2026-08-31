@@ -1,3 +1,4 @@
+import { DEVOLUCION } from '@/components/colors'
 import { formatMoney, formatMoneyShort, monthShort } from '@/lib/format'
 
 export interface MonthPoint {
@@ -9,11 +10,6 @@ export interface MonthPoint {
 /** Ingreso y gasto comparten escala (soles), así que van en un solo eje. */
 const INCOME = '#008300'
 const EXPENSE = '#e34948'
-/** Mismo azul de devolución que TransactionItem.tsx (`DEVOLUCION`): un
- *  movimiento con esa naturaleza tiene que verse igual en toda la app, sea
- *  en una fila del historial o acá. No es del semáforo de presupuesto
- *  (verde/ámbar/rojo) ni de un estado de error. */
-export const REFUND = '#1f6c9f'
 const H = 96
 
 /**
@@ -163,7 +159,7 @@ export function CategoryMonthlyBars({
                 <Bar
                   value={Math.abs(d.total)}
                   max={max}
-                  color={negativo ? REFUND : color}
+                  color={negativo ? DEVOLUCION : color}
                   dim={!isSel}
                 />
               </span>
@@ -182,7 +178,7 @@ export function CategoryMonthlyBars({
       <div className="flex items-center justify-center text-center text-[11px] text-muted-foreground">
         {point &&
           (devolucion ? (
-            <span className="font-medium" style={{ color: REFUND }}>
+            <span className="font-medium" style={{ color: DEVOLUCION }}>
               Te devolvieron{' '}
               <span className="font-semibold tabular-nums">{formatMoney(-point.total)}</span> más de
               lo que gastaste
