@@ -175,13 +175,17 @@ export function parseData(raw: unknown): Data | null {
 
   const budget = isBudget(o.monthlyBudget) ? o.monthlyBudget : 0
 
+  // Sin cuentas no hay dónde poner los movimientos, así que sembramos; pero si
+  // vienen y están corruptas rechazamos todo, como con las categorías: pisarlas
+  // con las semillas perdería las cuentas reales y dejaría cada movimiento
+  // apuntando a una cuenta que ya no existe.
+  if (o.accounts !== undefined && !(Array.isArray(o.accounts) && o.accounts.every(isAccount))) {
+    return null
+  }
+  const accounts = Array.isArray(o.accounts) && o.accounts.length > 0 ? o.accounts : seedAccounts()
+
   return {
-    // Una cuenta borrada dejaría movimientos huérfanos y saldos incalculables:
-    // ante un `accounts` ausente o vacío, volvemos a las semillas.
-    accounts:
-      Array.isArray(o.accounts) && o.accounts.length > 0 && o.accounts.every(isAccount)
-        ? o.accounts
-        : seedAccounts(),
+    accounts,
     categories,
     transactions,
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.

@@ -177,6 +177,12 @@ describe('addAdjustment', () => {
     expect(getAccount('a_bcp')!.balancePending).toBeUndefined()
   })
 
+  it('no anota nada contra una cuenta que no existe', () => {
+    // Sería un movimiento huérfano: no lo ve ningún saldo, pero se lista.
+    addAdjustment('a_nope', 50000, '2026-08-25')
+    expect(transactionsByMonth('2026-08').filter((t) => t.nature === 'adjustment')).toHaveLength(1)
+  })
+
   it('no toca el gasto ni el ingreso del mes', () => {
     addAdjustment('a_bcp', 999999, '2026-08-25')
     expect(monthTotals('2026-08')).toEqual({ income: 300000, expense: 6000, balance: 294000 })

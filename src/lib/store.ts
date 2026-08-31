@@ -207,6 +207,9 @@ export function totalInAccounts(): { totalCents: number; reliable: boolean } {
  * el saldo por configurado: un "Ajuste S/ 0.00" en el historial sería ruido.
  */
 export function addAdjustment(accountId: string, targetBalanceCents: number, date: string = todayISO()) {
+  // Sin cuenta el ajuste sería un movimiento huérfano: se listaría en el
+  // historial sin entrar en ningún saldo.
+  if (getAccount(accountId) === undefined) return
   const delta = targetBalanceCents - accountBalanceCents(accountId)
   const accounts = data.accounts.map((a) => {
     if (a.id !== accountId || a.balancePending === undefined) return a
