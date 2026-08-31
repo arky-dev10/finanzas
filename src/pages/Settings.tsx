@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
-import { formatMoney, monthLabelCap, sanitizeAmount } from '@/lib/format'
+import { centsToInput, formatMoney, monthLabelCap, parseAmountToCents, sanitizeAmount } from '@/lib/format'
 import { useInstall } from '@/lib/pwa'
 import { replaceData, resetData, setMonthlyBudget, useData } from '@/lib/store'
 
@@ -18,8 +18,10 @@ export function Settings() {
   const [ocupado, setOcupado] = useState(false)
 
   const meses = [...new Set(data.transactions.map((t) => t.date.slice(0, 7)))].sort()
+  // Gasto neto acumulado: la devolución descuenta, el ajuste no cuenta.
   const total = data.transactions.reduce(
-    (s, t) => (t.type === 'expense' ? s + t.amount : s),
+    (s, t) =>
+      t.nature === 'expense' ? s + t.amountCents : t.nature === 'refund' ? s - t.amountCents : s,
     0,
   )
 
@@ -236,12 +238,12 @@ function PasoInstalacion({ n, children }: { n: number; children: ReactNode }) {
 
 /** Tope de gasto de todo el mes: lo que el Resumen usa para el % del presupuesto. */
 function PresupuestoMensual({ actual }: { actual: number }) {
-  const [valor, setValor] = useState(actual > 0 ? String(actual) : '')
+  const [valor, setValor] = useState(actual > 0 ? centsToInput(actual) : '')
 
   function guardar() {
     const limpio = valor.trim()
-    const monto = limpio === '' ? 0 : Number(limpio)
-    if (!Number.isFinite(monto)) {
+    const monto = limpio === '' ? 0 : parseAmountToCents(limpio)
+    if (monto === null) {
       toast.error('Escribe un monto válido')
       return
     }
@@ -251,7 +253,7 @@ function PresupuestoMensual({ actual }: { actual: number }) {
     )
   }
 
-  const sinCambios = (actual > 0 ? String(actual) : '') === valor.trim()
+  const sinCambios = (actual > 0 ? centsToInput(actual) : '') === valor.trim()
 
   return (
     <section className="surface flex flex-col gap-3 p-5">
