@@ -34,9 +34,11 @@ export interface Data {
  * primer ajuste: son los movimientos que el usuario anotó, no lo que hay en el
  * banco. Efectivo arranca en cero de verdad, sin movimientos que lo desmientan.
  */
+export const DEFAULT_ACCOUNT_ID = 'a_bcp'
+
 export function seedAccounts(): Account[] {
   return [
-    { id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true },
+    { id: DEFAULT_ACCOUNT_ID, name: 'BCP', kind: 'bank', balancePending: true },
     { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
   ]
 }
@@ -81,8 +83,11 @@ function isTransaction(v: unknown): v is Transaction {
   // Solo un ajuste puede ser negativo: un gasto negativo sumaría al saldo.
   if (t.nature !== 'adjustment' && (t.amountCents as number) < 0) return false
   // La categoría es obligatoria salvo en ajustes, que no pertenecen a ninguna.
-  if (t.nature === 'adjustment' ? t.categoryId !== undefined && typeof t.categoryId !== 'string'
-                                : typeof t.categoryId !== 'string') return false
+  if (t.nature === 'adjustment') {
+    if (t.categoryId !== undefined && typeof t.categoryId !== 'string') return false
+  } else if (typeof t.categoryId !== 'string') {
+    return false
+  }
   if (t.medium !== undefined && !MEDIUMS.includes(t.medium as string)) return false
   return t.note === undefined || typeof t.note === 'string'
 }
@@ -119,7 +124,7 @@ function migrateTransaction(t: LegacyTransaction): Transaction {
     id: t.id,
     amountCents: Math.round(t.amount * 100),
     nature: t.type,
-    accountId: 'a_bcp',
+    accountId: DEFAULT_ACCOUNT_ID,
     categoryId: t.categoryId,
     date: t.date,
     ...(t.note === undefined ? {} : { note: t.note }),
@@ -141,6 +146,29 @@ function looksMigrated(o: Record<string, unknown>): boolean {
     Array.isArray(o.transactions) &&
     o.transactions.some((t) => typeof t === 'object' && t !== null && 'amountCents' in t)
   )
+}
+
+/**
+ * Limpia estados que el modelo declara imposibles pero que un archivo importado
+ * puede traer igual. Limpiamos en vez de rechazar: son campos de más, no plata,
+ * y tirar todo el respaldo por eso sería desproporcionado.
+ *
+ * El medio no aplica en efectivo (la plata en mano no se mueve por un canal), y
+ * un ajuste con categoría es peligroso además de incoherente: `deleteCategory`
+ * borra los movimientos de la categoría, así que se llevaría puesta la
+ * calibración y el saldo de la cuenta se movería solo.
+ */
+function normalizeTransactions(transactions: Transaction[], accounts: Account[]): Transaction[] {
+  const cash = new Set(accounts.filter((a) => a.kind === 'cash').map((a) => a.id))
+  return transactions.map((t) => {
+    const sobraMedio = t.medium !== undefined && cash.has(t.accountId)
+    const sobraCategoria = t.nature === 'adjustment' && t.categoryId !== undefined
+    if (!sobraMedio && !sobraCategoria) return t
+    const limpio = { ...t }
+    if (sobraMedio) delete limpio.medium
+    if (sobraCategoria) delete limpio.categoryId
+    return limpio
+  })
 }
 
 function isBudget(v: unknown): v is number {
@@ -187,7 +215,7 @@ export function parseData(raw: unknown): Data | null {
   return {
     accounts,
     categories,
-    transactions,
+    transactions: normalizeTransactions(transactions, accounts),
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
     // No inventamos un monto que el usuario no eligió.
     monthlyBudget: legacy ? Math.round(budget * 100) : budget,

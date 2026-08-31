@@ -171,8 +171,12 @@ export function deleteTransaction(id: string) {
 
 /* ---------- cuentas ---------- */
 
-/** Cuánto suma o resta un movimiento al saldo de su cuenta. */
-function signedCents(t: Transaction): number {
+/**
+ * Cuánto suma o resta un movimiento al saldo de su cuenta. Exportada porque
+ * es también el signo con el que se muestra en la lista: una devolución entra,
+ * un ajuste puede ir para cualquier lado.
+ */
+export function signedCents(t: Transaction): number {
   return t.nature === 'expense' ? -t.amountCents : t.amountCents
 }
 

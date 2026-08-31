@@ -86,16 +86,55 @@ describe('parseData — datos ya migrados', () => {
     const d = parseData({
       version: 3,
       monthlyBudget: 0,
-      accounts: [{ id: 'a_cash', name: 'Efectivo', kind: 'cash' }],
+      accounts: [
+        { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+        { id: 'a_bcp', name: 'BCP', kind: 'bank', lastMedium: 'yape' },
+      ],
       categories: [],
       transactions: [
         { id: 't1', amountCents: -500, nature: 'adjustment', accountId: 'a_cash', date: '2026-08-01' },
-        { id: 't2', amountCents: 900, nature: 'refund', accountId: 'a_cash', categoryId: 'c_food', medium: 'yape', date: '2026-08-02' },
+        { id: 't2', amountCents: 900, nature: 'refund', accountId: 'a_bcp', categoryId: 'c_food', medium: 'yape', date: '2026-08-02' },
       ],
     })!
-    expect(d.accounts).toHaveLength(1)
+    expect(d.accounts).toHaveLength(2)
     expect(d.transactions[0].amountCents).toBe(-500)
     expect(d.transactions[1].medium).toBe('yape')
+  })
+})
+
+describe('parseData — estados que el modelo declara imposibles', () => {
+  const conCuentas = (transactions: unknown[]) => ({
+    version: 3,
+    accounts: [
+      { id: 'a_bcp', name: 'BCP', kind: 'bank' },
+      { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+    ],
+    categories: [],
+    transactions,
+  })
+
+  it('saca el medio de un movimiento en efectivo', () => {
+    // La plata en mano no se mueve por un canal (CONTEXT.md, "Medio").
+    const d = parseData(conCuentas([
+      { id: 't1', amountCents: 900, nature: 'expense', accountId: 'a_cash', categoryId: 'c_food', medium: 'yape', date: '2026-08-02' },
+    ]))!
+    expect(d.transactions[0].medium).toBeUndefined()
+  })
+
+  it('deja el medio en una cuenta de banco', () => {
+    const d = parseData(conCuentas([
+      { id: 't1', amountCents: 900, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', medium: 'yape', date: '2026-08-02' },
+    ]))!
+    expect(d.transactions[0].medium).toBe('yape')
+  })
+
+  it('saca la categoría de un ajuste', () => {
+    // Con categoría, borrar esa categoría se llevaría el ajuste puesto y el
+    // saldo de la cuenta se movería solo (ver `deleteCategory`).
+    const d = parseData(conCuentas([
+      { id: 't1', amountCents: 500, nature: 'adjustment', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-01' },
+    ]))!
+    expect(d.transactions[0].categoryId).toBeUndefined()
   })
 })
 
