@@ -9,6 +9,9 @@ export interface MonthPoint {
 /** Ingreso y gasto comparten escala (soles), así que van en un solo eje. */
 const INCOME = '#008300'
 const EXPENSE = '#e34948'
+/** Mismo azul que el "Ver todo"/"Ver todas" del Resumen e Historial: tono
+ *  informativo, no del semáforo de presupuesto (verde/ámbar/rojo). */
+export const REFUND = '#2a78d6'
 const H = 96
 
 /**
@@ -99,5 +102,93 @@ function Key({ color, label, value }: { color: string; label: string; value?: nu
         </span>
       )}
     </span>
+  )
+}
+
+export interface CategoryMonthPoint {
+  month: string
+  total: number
+}
+
+/**
+ * Variante de una sola serie de MonthlyBars, para la evolución de UNA
+ * categoría (CategoryDetail): mismo lenguaje visual (tap cambia de mes,
+ * barra redondeada, cifra directa solo del mes seleccionado) pero con el
+ * color de la categoría en vez del par ingreso/gasto.
+ *
+ * Un mes con más devoluciones que gasto da neto NEGATIVO — pasa de verdad
+ * (una devolución grande en una categoría de poco movimiento). Ese mes se
+ * pinta de azul en vez del color de la categoría: si usáramos el mismo
+ * `Bar` que ingreso/gasto (que solo dibuja alto para valores > 0) el mes
+ * se vería como "sin datos", que es lo contrario de lo que pasó.
+ */
+export function CategoryMonthlyBars({
+  data,
+  selected,
+  onSelect,
+  color,
+}: {
+  data: CategoryMonthPoint[]
+  selected: string
+  onSelect: (month: string) => void
+  color: string
+}) {
+  const max = Math.max(...data.map((d) => Math.abs(d.total)), 1)
+  const point = data.find((d) => d.month === selected)
+  const devolucion = point !== undefined && point.total < 0
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-end gap-1.5">
+        {data.map((d) => {
+          const isSel = d.month === selected
+          const negativo = d.total < 0
+          return (
+            <button
+              key={d.month}
+              onClick={() => onSelect(d.month)}
+              className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg px-0.5 pt-1 pb-1 transition ${
+                isSel ? 'bg-muted' : 'active:bg-muted/50'
+              }`}
+              aria-label={
+                negativo
+                  ? `${monthShort(d.month)}: te devolvieron ${formatMoney(-d.total)} más de lo que gastaste`
+                  : `${monthShort(d.month)}: ${formatMoney(d.total)}`
+              }
+              aria-pressed={isSel}
+            >
+              <span className="flex h-24 w-full items-end justify-center">
+                <Bar
+                  value={Math.abs(d.total)}
+                  max={max}
+                  color={negativo ? REFUND : color}
+                  dim={!isSel}
+                />
+              </span>
+              <span
+                className={`text-[10px] capitalize tabular-nums ${
+                  isSel ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {monthShort(d.month)}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center justify-center text-center text-[11px] text-muted-foreground">
+        {point &&
+          (devolucion ? (
+            <span className="font-medium" style={{ color: REFUND }}>
+              Te devolvieron{' '}
+              <span className="font-semibold tabular-nums">{formatMoney(-point.total)}</span> más de
+              lo que gastaste
+            </span>
+          ) : (
+            <span className="font-semibold text-foreground tabular-nums">{formatMoney(point.total)}</span>
+          ))}
+      </div>
+    </div>
   )
 }
