@@ -272,8 +272,8 @@ export function Dashboard() {
                     {st.text} ·{' '}
                     <span className="tabular-nums">
                       {b.over
-                        ? `${formatMoney(b.spent - b.budget)} de más`
-                        : `quedan ${formatMoney(b.budget - b.spent)}`}
+                        ? `${formatMoney(b.spentCents - b.budgetCents)} de más`
+                        : `quedan ${formatMoney(b.budgetCents - b.spentCents)}`}
                     </span>
                   </p>
                 </div>
@@ -378,8 +378,8 @@ function MonthlyBudget({ status }: { status: MonthlyBudgetStatus }) {
         </span>
         <span className="tabular-nums text-muted-foreground">
           {status.over
-            ? `· ${formatMoney(-status.remaining)} sobre los ${formatMoney(status.budget)}`
-            : `· quedan ${formatMoney(status.remaining)} de ${formatMoney(status.budget)}`}
+            ? `· ${formatMoney(-status.remainingCents)} sobre los ${formatMoney(status.budgetCents)}`
+            : `· quedan ${formatMoney(status.remainingCents)} de ${formatMoney(status.budgetCents)}`}
         </span>
       </p>
     </div>

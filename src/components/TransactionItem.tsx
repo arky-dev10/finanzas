@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { formatMoney, shortDate } from '@/lib/format'
-import { deleteTransaction, getAccount, getCategory, insertTransaction } from '@/lib/store'
+import {
+  deleteTransaction,
+  getAccount,
+  getCategory,
+  insertTransaction,
+  signedCents,
+} from '@/lib/store'
 import type { Medium, Transaction } from '@/types'
 
 const MEDIOS: Record<Medium, string> = {
@@ -42,8 +48,8 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
     })
   }
 
-  // El ajuste ya trae su signo en el monto; el resto lo toma de la naturaleza.
-  const monto = tx.nature === 'expense' ? -tx.amountCents : tx.amountCents
+  // El signo de un movimiento tiene una sola definición, y vive en el store.
+  const monto = signedCents(tx)
   const tono =
     tx.nature === 'income'
       ? 'text-emerald-600'
