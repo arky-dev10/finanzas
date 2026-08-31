@@ -1,5 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Copy, Download, RotateCcw, Share, Share2, Smartphone, Upload } from 'lucide-react'
+import {
+  Copy, Download, Link2, Link2Off, RefreshCw, RotateCcw, Share, Share2, Smartphone,
+  TriangleAlert, Upload,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +11,10 @@ import { backupFilename, parseData, serialize } from '@/lib/backup'
 import { centsToInput, formatMoney, monthLabelCap, parseAmountToCents, sanitizeAmount } from '@/lib/format'
 import { useInstall } from '@/lib/pwa'
 import { replaceData, resetData, setMonthlyBudgetCents, useData } from '@/lib/store'
+import {
+  getSyncState, link, resolveConflict, syncNow, unlink,
+  type LinkMode, type SyncState,
+} from '@/lib/sync'
 
 /** En navegadores sin Web Share (escritorio) el respaldo baja como archivo. */
 const PUEDE_COMPARTIR = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function'
@@ -16,6 +23,7 @@ export function Settings() {
   const data = useData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [ocupado, setOcupado] = useState(false)
+  const vinculado = getSyncState() !== null
 
   const meses = [...new Set(data.transactions.map((t) => t.date.slice(0, 7)))].sort()
   // Gasto neto acumulado: la devolución descuenta, el ajuste no cuenta.
@@ -115,10 +123,13 @@ export function Settings() {
           />
         </dl>
         <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
-          Todo se guarda solo en este dispositivo. Si limpias los datos del navegador o
-          cambias de celular, se pierde. Exporta cada tanto.
+          {vinculado
+            ? 'Se guarda en este dispositivo y se sincroniza con tu cuenta. Aunque cambies de celular, tus movimientos vuelven al entrar.'
+            : 'Todo se guarda solo en este dispositivo. Si limpias los datos del navegador o cambias de celular, se pierde. Exporta cada tanto, o vincula el dispositivo acá abajo.'}
         </p>
       </section>
+
+      <VincularDispositivos />
 
       <section className="surface flex flex-col gap-3 p-5">
         <h2 className="text-base font-semibold">Respaldo</h2>
@@ -288,5 +299,215 @@ function Dato({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-semibold tabular-nums">{value}</dd>
     </div>
+  )
+}
+
+/* ---------- vincular dispositivos ---------- */
+
+const PIN_LARGO = 6
+
+/**
+ * Vinculación con el servidor. Local-first: sin vincular la app anda igual, y
+ * desvincular no borra nada. Lo único que se le pregunta al usuario es el
+ * conflicto, porque es lo único que no se puede decidir por él.
+ */
+function VincularDispositivos() {
+  const [estado, setEstado] = useState<SyncState | null>(() => getSyncState())
+  const [conflicto, setConflicto] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
+  const [servidor, setServidor] = useState('')
+  const [usuario, setUsuario] = useState('')
+  const [pin, setPin] = useState('')
+
+  const puedeVincular =
+    servidor.trim() !== '' && usuario.trim().length >= 3 && pin.length === PIN_LARGO
+
+  async function vincular(mode: LinkMode) {
+    setOcupado(true)
+    const r = await link(servidor.trim(), usuario.trim(), pin, mode)
+    // El PIN no se queda en memoria más de lo necesario.
+    setPin('')
+    setOcupado(false)
+
+    if (r.status === 'ok') {
+      setEstado(getSyncState())
+      toast.success(`Vinculado como ${r.username}`)
+      void sincronizar()
+      return
+    }
+    const mensajes: Record<string, string> = {
+      'bad-credentials': 'Usuario o PIN incorrectos',
+      'username-taken': 'Ese usuario ya existe. Entrá con tu PIN.',
+      offline: 'No se pudo conectar con el servidor',
+    }
+    if (r.status === 'locked') {
+      const min = Math.ceil(r.retryAfterSeconds / 60)
+      toast.error(`Demasiados intentos. Probá en ${min === 1 ? 'un minuto' : `${min} minutos`}.`)
+      return
+    }
+    toast.error(mensajes[r.status] ?? (r.status === 'error' ? r.message : 'No se pudo vincular'))
+  }
+
+  async function sincronizar() {
+    setOcupado(true)
+    const r = await syncNow()
+    setEstado(getSyncState())
+    setOcupado(false)
+
+    if (r.status === 'conflict') return setConflicto(true)
+    if (r.status === 'ok') {
+      toast.success(r.pushed ? 'Cambios subidos' : r.pulled ? 'Datos actualizados' : 'Todo al día')
+      return
+    }
+    if (r.status === 'offline') return void toast.error('Sin conexión. Se sincroniza cuando vuelva.')
+    if (r.status === 'auth-expired') return void toast.error('Se venció la sesión. Volvé a vincular.')
+    if (r.status === 'error') toast.error(r.message)
+  }
+
+  async function resolver(quedarse: 'server' | 'local') {
+    setOcupado(true)
+    const r = await resolveConflict(quedarse)
+    setEstado(getSyncState())
+    setConflicto(false)
+    setOcupado(false)
+    if (r.status === 'ok') {
+      toast.success(quedarse === 'server' ? 'Se trajeron los datos del servidor' : 'Se subieron los datos de este dispositivo')
+    } else if (r.status === 'error') {
+      toast.error(r.message)
+    }
+  }
+
+  function desvincular() {
+    unlink()
+    setEstado(null)
+    setConflicto(false)
+    toast('Dispositivo desvinculado · tus datos siguen acá')
+  }
+
+  if (!estado) {
+    return (
+      <section className="surface flex flex-col gap-3 p-5">
+        <h2 className="text-base font-semibold">Vincular dispositivos</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Guardá una copia en tu cuenta para verla en otro celular. Kumi sigue
+          funcionando sin conexión: la copia se actualiza sola cuando hay red.
+        </p>
+
+        <div className="grid gap-2">
+          <Label htmlFor="srv">Servidor</Label>
+          <Input
+            id="srv"
+            inputMode="url"
+            autoCapitalize="none"
+            placeholder="https://kumi.tuservidor.com"
+            value={servidor}
+            onChange={(e) => setServidor(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="usr">Usuario</Label>
+          <Input
+            id="usr"
+            autoCapitalize="none"
+            autoComplete="username"
+            placeholder="tu-usuario"
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="pin">PIN de 6 dígitos</Label>
+          <Input
+            id="pin"
+            type="password"
+            inputMode="numeric"
+            autoComplete="current-password"
+            maxLength={PIN_LARGO}
+            placeholder="••••••"
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, PIN_LARGO))}
+          />
+        </div>
+
+        {/* Anchos completos como el resto de Ajustes: en dos columnas, el botón
+            de la derecha queda debajo del botón flotante de registrar. */}
+        <div className="mt-1 flex flex-col gap-2">
+          <Button
+            onClick={() => vincular('register')}
+            disabled={!puedeVincular || ocupado}
+            className="h-11 justify-start gap-2"
+          >
+            <Link2 size={17} />
+            Crear cuenta
+          </Button>
+          <Button
+            onClick={() => vincular('login')}
+            disabled={!puedeVincular || ocupado}
+            variant="secondary"
+            className="h-11 justify-start gap-2"
+          >
+            <RefreshCw size={17} />
+            Ya tengo cuenta en otro dispositivo
+          </Button>
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Anotá tu PIN en algún lado: no hay forma de recuperarlo. Si lo perdés,
+          los datos de este celular siguen intactos, pero la copia del servidor
+          queda inaccesible.
+        </p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="surface flex flex-col gap-3 p-5">
+      <h2 className="text-base font-semibold">Vincular dispositivos</h2>
+
+      <div className="flex items-center gap-2 text-sm">
+        <Link2 size={17} className="shrink-0 text-emerald-600" />
+        <span className="min-w-0 flex-1 truncate">
+          Vinculado como <strong>{estado.username}</strong>
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {estado.lastSyncAt
+          ? `Última sincronización: ${new Date(estado.lastSyncAt).toLocaleString('es-PE')}`
+          : 'Todavía no se sincronizó'}
+        {estado.dirty && ' · hay cambios sin subir'}
+      </p>
+
+      {conflicto && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-start gap-2">
+            <TriangleAlert size={17} className="mt-0.5 shrink-0 text-amber-600" />
+            <p className="text-xs leading-relaxed text-amber-900">
+              Este dispositivo y el servidor cambiaron por separado. No se pisó
+              nada todavía: elegí con cuál quedarte.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={() => resolver('local')} disabled={ocupado} className="h-10 text-xs">
+              Lo de este celular
+            </Button>
+            <Button onClick={() => resolver('server')} disabled={ocupado} variant="secondary" className="h-10 text-xs">
+              Lo del servidor
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Button onClick={sincronizar} disabled={ocupado} className="h-11 justify-start gap-2">
+        <RefreshCw size={17} />
+        Sincronizar ahora
+      </Button>
+      <Button onClick={desvincular} variant="secondary" className="h-11 justify-start gap-2">
+        <Link2Off size={17} />
+        Desvincular este dispositivo
+      </Button>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Desvincular no borra nada: tus movimientos siguen en este celular y la
+        copia sigue en tu cuenta.
+      </p>
+    </section>
   )
 }
