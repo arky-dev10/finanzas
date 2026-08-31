@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Landmark, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,26 +9,54 @@ import { CategoryIcon } from '@/components/CategoryIcon'
 import { addTransaction, getTransaction, updateTransaction, useData } from '@/lib/store'
 import { centsToInput, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/backup'
-import type { CategoryKind } from '@/types'
+import type { Account, Medium, TxNature } from '@/types'
+
+/** Las naturalezas que se eligen acá. El ajuste no: se crea desde Cuentas. */
+type Nature = Exclude<TxNature, 'adjustment'>
+
+const NATURES: { id: Nature; label: string; active: string }[] = [
+  { id: 'expense', label: 'Gasto', active: 'border-rose-500 bg-rose-50 text-rose-600' },
+  { id: 'income', label: 'Ingreso', active: 'border-emerald-500 bg-emerald-50 text-emerald-600' },
+  { id: 'refund', label: 'Devolución', active: 'border-accent bg-accent text-accent-foreground' },
+]
+
+const MEDIA: { id: Medium; label: string }[] = [
+  { id: 'yape', label: 'Yape' },
+  { id: 'plin', label: 'Plin' },
+  { id: 'card', label: 'Tarjeta' },
+  { id: 'transfer', label: 'Transferencia' },
+  { id: 'other', label: 'Otro' },
+]
 
 export function AddTransaction() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { accounts, categories } = useData()
+  const { accounts, categories, transactions } = useData()
   const existing = id ? getTransaction(id) : undefined
   const isEdit = Boolean(id)
 
-  // Esta pantalla todavía es de 2 naturalezas; devolución y ajuste llegan con
-  // el rediseño de Registrar.
-  const [type, setType] = useState<CategoryKind>(existing?.nature === 'income' ? 'income' : 'expense')
+  const initialNature: Nature =
+    existing && existing.nature !== 'adjustment' ? existing.nature : 'expense'
+  const [nature, setNature] = useState<Nature>(initialNature)
   const [amount, setAmount] = useState(existing ? centsToInput(existing.amountCents) : '')
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
   const [date, setDate] = useState(existing?.date ?? todayISO())
   const [note, setNote] = useState(existing?.note ?? '')
+  // Cuenta: la del movimiento en edición, o la última usada (D1 del ADR).
+  const [accountId, setAccountId] = useState(
+    existing?.accountId ?? transactions[0]?.accountId ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
+  )
+  const account = accounts.find((a) => a.id === accountId) ?? accounts[0]
+  // Medio: el de la cuenta en edición, el último de la cuenta, o Yape por
+  // defecto en una cuenta bancaria nueva — el caso común es Yape (ver ADR).
+  const [medium, setMedium] = useState<Medium | undefined>(
+    existing?.medium ?? account?.lastMedium ?? (account?.kind === 'bank' ? 'yape' : undefined),
+  )
 
+  // La devolución usa las categorías de gasto: resta de ese gasto, no es un ingreso.
   const cats = useMemo(
-    () => categories.filter((c) => c.type === type),
-    [categories, type],
+    () => categories.filter((c) => c.type === (nature === 'income' ? 'income' : 'expense')),
+    [categories, nature],
   )
 
   // El movimiento fue borrado desde otra pantalla mientras estabas acá.
@@ -41,9 +69,24 @@ export function AddTransaction() {
     )
   }
 
+  // El ajuste no es un gasto ni un ingreso (ver CONTEXT.md): se edita desde Cuentas.
+  if (isEdit && existing?.nature === 'adjustment') {
+    return (
+      <div className="flex min-h-svh flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="text-sm text-muted-foreground">Los ajustes se editan desde Cuentas.</p>
+        <Button onClick={() => navigate('/cuentas', { replace: true })}>Ir a Cuentas</Button>
+      </div>
+    )
+  }
+
+  function selectAccount(a: Account) {
+    setAccountId(a.id)
+    setMedium(a.lastMedium ?? (a.kind === 'bank' ? 'yape' : undefined))
+  }
+
   function submit() {
-    const value = parseAmountToCents(amount)
-    if (!value || value <= 0) {
+    const cents = parseAmountToCents(amount)
+    if (!cents || cents <= 0) {
       toast.error('Ingresa un monto válido')
       return
     }
@@ -51,12 +94,13 @@ export function AddTransaction() {
       toast.error('Elige una categoría')
       return
     }
+
     const payload = {
-      amountCents: value,
+      amountCents: cents,
+      nature,
+      accountId,
       categoryId,
-      nature: type,
-      // Sin selector de cuenta todavía: va a la primera, como todo el historial.
-      accountId: existing?.accountId ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
+      medium: account?.kind === 'bank' ? medium : undefined,
       date,
       note: note.trim() || undefined,
     }
@@ -99,37 +143,25 @@ export function AddTransaction() {
           />
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          {type === 'expense' ? 'Gasto' : 'Ingreso'}
+          {NATURES.find((n) => n.id === nature)?.label}
         </p>
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-2">
-        <button
-          onClick={() => {
-            setType('expense')
-            setCategoryId('')
-          }}
-          className={`rounded-xl border-2 py-2.5 text-sm font-medium transition ${
-            type === 'expense'
-              ? 'border-rose-500 bg-rose-50 text-rose-600'
-              : 'border-border text-muted-foreground'
-          }`}
-        >
-          Gasto
-        </button>
-        <button
-          onClick={() => {
-            setType('income')
-            setCategoryId('')
-          }}
-          className={`rounded-xl border-2 py-2.5 text-sm font-medium transition ${
-            type === 'income'
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
-              : 'border-border text-muted-foreground'
-          }`}
-        >
-          Ingreso
-        </button>
+      <div className="mb-5 grid grid-cols-3 gap-2">
+        {NATURES.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => {
+              setNature(n.id)
+              setCategoryId('')
+            }}
+            className={`rounded-xl border-2 py-2.5 text-sm font-medium transition ${
+              nature === n.id ? n.active : 'border-border text-muted-foreground'
+            }`}
+          >
+            {n.label}
+          </button>
+        ))}
       </div>
 
       <div className="mb-5 grid grid-cols-4 gap-3">
@@ -145,6 +177,44 @@ export function AddTransaction() {
             <span className="text-center text-[11px] leading-tight">{c.name}</span>
           </button>
         ))}
+      </div>
+
+      <div className="mb-5 flex flex-col gap-2.5">
+        <span className="text-xs font-medium text-muted-foreground">Cuenta</span>
+        <div className="flex gap-2">
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => selectAccount(a)}
+              className={`flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition ${
+                accountId === a.id
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : 'border-border text-muted-foreground'
+              }`}
+            >
+              {a.kind === 'bank' ? <Landmark size={15} /> : <Wallet size={15} />}
+              {a.name}
+            </button>
+          ))}
+        </div>
+
+        {account?.kind === 'bank' && (
+          <div className="flex flex-wrap gap-1.5">
+            {MEDIA.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMedium(m.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  medium === m.id
+                    ? 'border-accent bg-accent text-accent-foreground'
+                    : 'border-border text-muted-foreground'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mb-5 flex flex-col gap-4">
