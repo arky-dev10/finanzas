@@ -44,8 +44,8 @@ Cuánta plata hay en una Cuenta en este momento, derivado de sus movimientos (aj
 _Avoid_: disponible, balance
 
 **En cuentas**:
-Total de saldos de todas las Cuentas del usuario. Es lo que muestra el Resumen mientras no existan compromisos ni deuda; no confiable si alguna cuenta tiene saldo pendiente de configurar.
-_Avoid_: llamarlo Disponible
+Total de saldos de las Cuentas calibradas del usuario. Una cuenta con saldo pendiente de configurar queda fuera de la suma — su saldo es desconocido, no cero — y el total se marca como incompleto. Es lo que muestra el Resumen mientras no existan compromisos ni deuda.
+_Avoid_: llamarlo Disponible, sumar cuentas sin calibrar como si valieran cero
 
 **Disponible**:
 Dinero que el usuario puede gastar realmente sin comprometer sus próximos pagos: parte de los saldos y descuenta compromisos y deuda futura. NO es la suma de saldos (eso es el total en cuentas) ni «ingresos − gastos del mes» (eso es el neto mensual, que hoy el Resumen llama «balance» por error de modelo).
