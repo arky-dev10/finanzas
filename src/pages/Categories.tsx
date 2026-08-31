@@ -104,8 +104,8 @@ function Section({
                 <span className="block truncate text-sm font-medium">{c.name}</span>
                 {c.type === 'expense' && (
                   <span className="block text-xs text-muted-foreground tabular-nums">
-                    {c.budget
-                      ? `Presupuesto ${formatMoney(c.budget)}`
+                    {c.budgetCents
+                      ? `Presupuesto ${formatMoney(c.budgetCents)}`
                       : 'Sin presupuesto'}
                   </span>
                 )}
@@ -137,7 +137,7 @@ function EditForm({ category, onDone }: { category: Category; onDone: () => void
   const [name, setName] = useState(category.name)
   const [color, setColor] = useState(category.color)
   const [icon, setIcon] = useState(category.icon)
-  const [budget, setBudget] = useState(category.budget ? centsToInput(category.budget) : '')
+  const [budget, setBudget] = useState(category.budgetCents ? centsToInput(category.budgetCents) : '')
 
   function save() {
     if (!name.trim()) {
@@ -149,7 +149,7 @@ function EditForm({ category, onDone }: { category: Category; onDone: () => void
       name: name.trim(),
       color,
       icon,
-      budget: category.type === 'expense' && value > 0 ? value : undefined,
+      budgetCents: category.type === 'expense' && value > 0 ? value : undefined,
     })
     toast.success('Categoría actualizada')
     onDone()
@@ -214,7 +214,7 @@ function CreateForm({ onDone }: { onDone: () => void }) {
       type,
       color,
       icon,
-      budget: type === 'expense' && value > 0 ? value : undefined,
+      budgetCents: type === 'expense' && value > 0 ? value : undefined,
     })
     toast.success('Categoría creada')
     onDone()

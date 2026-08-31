@@ -39,7 +39,7 @@ function sembrar(patch: Partial<Parameters<typeof replaceData>[0]> = {}) {
     accounts: CUENTAS,
     categories: CATEGORIAS,
     transactions: MOVIMIENTOS,
-    monthlyBudget: 0,
+    monthlyBudgetCents: 0,
     onboarded: true,
     ...patch,
   })
@@ -221,10 +221,10 @@ describe('el medio se recuerda por cuenta', () => {
 
 describe('presupuestos, en céntimos', () => {
   it('mide el tope mensual contra el gasto neto', () => {
-    sembrar({ monthlyBudget: 10000 })
+    sembrar({ monthlyBudgetCents: 10000 })
     const s = monthlyBudgetStatus('2026-08')!
-    expect(s.spent).toBe(6000)
-    expect(s.remaining).toBe(4000)
+    expect(s.spentCents).toBe(6000)
+    expect(s.remainingCents).toBe(4000)
     expect(s.over).toBe(false)
   })
 
@@ -233,9 +233,9 @@ describe('presupuestos, en céntimos', () => {
   })
 
   it('mide el presupuesto por categoría contra el gasto neto', () => {
-    sembrar({ categories: [{ ...CATEGORIAS[0], budget: 5000 }, ...CATEGORIAS.slice(1)] })
+    sembrar({ categories: [{ ...CATEGORIAS[0], budgetCents: 5000 }, ...CATEGORIAS.slice(1)] })
     const [b] = budgetStatus('2026-08')
-    expect(b.spent).toBe(6000)
+    expect(b.spentCents).toBe(6000)
     expect(b.over).toBe(true)
   })
 })

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
 import { centsToInput, formatMoney, monthLabelCap, parseAmountToCents, sanitizeAmount } from '@/lib/format'
 import { useInstall } from '@/lib/pwa'
-import { replaceData, resetData, setMonthlyBudget, useData } from '@/lib/store'
+import { replaceData, resetData, setMonthlyBudgetCents, useData } from '@/lib/store'
 
 /** En navegadores sin Web Share (escritorio) el respaldo baja como archivo. */
 const PUEDE_COMPARTIR = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function'
@@ -95,7 +95,7 @@ export function Settings() {
       <InstalarApp />
 
       {/* `key` para que el input se re-sincronice tras importar o empezar de cero. */}
-      <PresupuestoMensual key={data.monthlyBudget} actual={data.monthlyBudget} />
+      <PresupuestoMensual key={data.monthlyBudgetCents} actual={data.monthlyBudgetCents} />
 
       <section className="surface flex flex-col gap-4 p-5">
         <h2 className="text-base font-semibold">Tus datos</h2>
@@ -247,7 +247,7 @@ function PresupuestoMensual({ actual }: { actual: number }) {
       toast.error('Escribe un monto válido')
       return
     }
-    setMonthlyBudget(monto)
+    setMonthlyBudgetCents(monto)
     toast.success(
       monto > 0 ? `Presupuesto mensual: ${formatMoney(monto)}` : 'Presupuesto mensual desactivado',
     )

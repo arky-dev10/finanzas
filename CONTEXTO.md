@@ -122,6 +122,12 @@ solo como el string que el usuario tipea: entran con `parseAmountToCents` y
 salen con `formatMoney`, que **recibe céntimos**. En el medio no hay decimales,
 así las comparaciones de presupuesto son exactas.
 
+**Todo campo de plata lleva el sufijo `Cents`** — en los tipos, en el respaldo y
+en lo que devuelven los selectores. No es cosmético: soles y céntimos son los dos
+`number`, así que el compilador no distingue uno de otro y el sufijo es lo único
+que avisa. Los dos bugs de ×100 que hubo en este modelo salieron justo de campos
+que guardaban céntimos sin decirlo en el nombre.
+
 ```ts
 type AccountKind = 'bank' | 'cash'
 type Medium = 'yape' | 'plin' | 'card' | 'transfer' | 'other'
@@ -143,7 +149,7 @@ interface Category {
   icon: string       // nombre del icono lucide (ver lib/icons.ts)
   color: string      // hex
   type: CategoryKind
-  budget?: number    // presupuesto mensual EN CÉNTIMOS, solo gastos
+  budgetCents?: number  // presupuesto mensual, solo gastos
 }
 
 interface Transaction {
@@ -162,7 +168,7 @@ interface Data {
   accounts: Account[]
   categories: Category[]
   transactions: Transaction[]
-  monthlyBudget: number   // tope de todo el mes EN CÉNTIMOS; 0 = sin tope
+  monthlyBudgetCents: number  // tope de todo el mes; 0 = sin tope
   onboarded: boolean      // si ya pasó por la bienvenida; NO va en el respaldo
 }
 ```
@@ -197,11 +203,11 @@ contra la realidad en vez de inventar un gasto o un ingreso para cuadrar.
 - Acciones: `addTransaction`, `insertTransaction` (deshacer), `updateTransaction`,
   `deleteTransaction`, `addAdjustment` (calibrar una cuenta), `addCategory`,
   `updateCategory`, `deleteCategory` (devuelve lo borrado), `restoreCategory`,
-  `setMonthlyBudget`, `replaceData` (importar, devuelve lo previo).
+  `setMonthlyBudgetCents`, `replaceData` (importar, devuelve lo previo).
 - Selectores: `transactionsByMonth`, `monthTotals`, `expenseByCategory`,
   `lastMonthsTotals`, `monthlyBudgetStatus` (tope global, `null` si no hay),
-  `budgetStatus` (por categoría), `balanceTrend`, `accountBalanceCents`,
-  `totalInAccounts`, `signedCents`, `getCategory`, `getAccount`, `getTransaction`.
+  `budgetStatus` (por categoría), `accountBalanceCents`, `totalInAccounts`,
+  `signedCents`, `getCategory`, `getAccount`, `getTransaction`.
 - **`totalInAccounts()`** devuelve `{ totalCents, reliable }` y es lo que el Resumen
   muestra como «En cuentas» — *no* como «Disponible», que queda reservado para cuando
   pueda descontar compromisos y deuda. Las cuentas con `balancePending` quedan **fuera
@@ -212,8 +218,9 @@ contra la realidad en vez de inventar un gasto o un ingreso para cuadrar.
   da el saldo por configurado: un «Ajuste S/ 0.00» en el historial sería ruido.
 - **`replaceData` copia campo por campo**: si algún día `Data` gana un campo nuevo, hay
   que sumarlo ahí o importar un respaldo lo pierde en silencio.
-- El respaldo va por **`BACKUP_VERSION = 3`** (céntimos, cuentas y naturalezas). Los
-  archivos v1 y v2 se siguen importando y `parseData` los migra (ver abajo).
+- El respaldo va por **`BACKUP_VERSION = 4`** (v3 trajo céntimos, cuentas y naturalezas;
+  v4 renombró `budget`/`monthlyBudget` a `budgetCents`/`monthlyBudgetCents`). Los archivos
+  v1, v2 y v3 se siguen importando y `parseData` los migra (ver abajo).
 
 ---
 
@@ -263,6 +270,13 @@ a céntimos.
 > que es v2, `looksMigrated()` mira la forma (¿hay `accounts`?, ¿hay `amountCents`?), y de
 > ahora en más el store **guarda `version` al persistir**. Lo cuida el test *"no vuelve a
 > multiplicar por 100 al releer lo que acaba de guardar"*.
+
+Por lo mismo, **la migración de unidades se decide contra `CENTS_SINCE = 3`, no contra
+`BACKUP_VERSION`**: si se comparara contra la versión actual, cada versión nueva que no
+cambie la unidad —- como v4, que solo renombró campos —- volvería a multiplicar por 100 la
+plata del usuario. v3 escribía `budget`/`monthlyBudget` ya en céntimos, así que `parseData`
+lee cualquiera de los dos nombres y reconstruye la categoría para no dejar el campo viejo
+colgando al lado del nuevo.
 
 `resetData()` sí lo pone en `false`: "Borrar todo y empezar de cero" te devuelve a la
 bienvenida, y el "Deshacer" del toast restaura el flag y te trae de vuelta al Resumen.
