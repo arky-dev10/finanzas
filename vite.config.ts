@@ -127,7 +127,7 @@ export default defineConfig({
             sizes: '1280x800',
             type: 'image/png',
             form_factor: 'wide',
-            label: 'Finanzas en el escritorio',
+            label: 'Kumi en el escritorio',
           },
         ],
       },
