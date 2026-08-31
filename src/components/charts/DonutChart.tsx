@@ -7,8 +7,12 @@ export interface Slice {
   color: string
 }
 
-const R = 52
-const STROKE = 22
+/*
+ * El agujero tiene que dar para el monto del mes: con R=52 y trazo 22 quedaban
+ * 82px de ancho útil y "S/ 1,866.90" se montaba sobre el anillo.
+ */
+const R = 64
+const STROKE = 20
 const C = 2 * Math.PI * R
 /** Separación entre porciones, en px de circunferencia (regla de 2px de la guía de dataviz). */
 const GAP = 3
@@ -20,20 +24,24 @@ const GAP = 3
  */
 export function DonutChart({
   slices,
+  total,
   selectedId,
   onSelect,
 }: {
   slices: Slice[]
+  /** Gasto neto del mes: el número del centro y el denominador de los %. */
+  total: number
   selectedId: string | null
   onSelect: (id: string | null) => void
 }) {
-  const total = slices.reduce((s, x) => s + x.value, 0)
+  // La geometría del anillo sí se reparte entre las porciones: tiene que cerrar 360°.
+  const dibujado = slices.reduce((s, x) => s + x.value, 0)
   const selected = slices.find((s) => s.id === selectedId) ?? null
 
   let running = 0
   const arcs: (Slice & { len: number; offset: number })[] = []
   for (const s of slices) {
-    const full = (s.value / total) * C
+    const full = (s.value / dibujado) * C
     arcs.push({ ...s, len: Math.max(full - GAP, 1), offset: running })
     running += full
   }
@@ -70,10 +78,10 @@ export function DonutChart({
           </g>
         </svg>
 
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
           {selected ? (
             <>
-              <span className="max-w-[84px] truncate text-[11px] text-muted-foreground">
+              <span className="max-w-[104px] truncate text-[11px] text-muted-foreground">
                 {selected.label}
               </span>
               <span className="text-base font-bold tabular-nums">
