@@ -48,15 +48,15 @@ export default defineConfig({
         // `id` fija la identidad de la app: sin esto, cambiar `start_url`
         // mañana crea una instalación nueva en vez de actualizar la existente.
         id: '/',
-        name: 'Finanzas',
-        short_name: 'Finanzas',
+        name: 'Kumi',
+        short_name: 'Kumi',
         description:
-          'Control de gastos e ingresos por categoría, en soles y sin conexión.',
+          'Kumi: control de gastos e ingresos por categoría, en soles y sin conexión.',
         lang: 'es-PE',
         dir: 'ltr',
         categories: ['finance', 'productivity'],
-        theme_color: '#f7f8fa',
-        background_color: '#f7f8fa',
+        theme_color: '#faf7f2',
+        background_color: '#faf7f2',
         display: 'standalone',
         display_override: ['standalone', 'minimal-ui'],
         orientation: 'portrait',

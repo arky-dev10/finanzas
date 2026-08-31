@@ -2,18 +2,20 @@
 <html lang="es-PE">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- PNG, no SVG: el ícono viene del logo (assets/brand/kumi-logo.png),
+         que es un raster. pwa-64x64.png ya trae sus esquinas redondeadas. -->
+    <link rel="icon" type="image/png" href="/pwa-64x64.png" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <!-- Igual que --page en index.css: así la barra de estado de Android se
          funde con la app en vez de marcar una franja blanca. -->
-    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="theme-color" content="#faf7f2" />
     <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="Control de gastos e ingresos por categoría, en soles y sin conexión."
+      content="Kumi: control de gastos e ingresos por categoría, en soles y sin conexión."
     />
 
     <!-- Instalada a pantalla completa. `apple-` está deprecado pero sigue
@@ -21,11 +23,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Finanzas" />
+    <meta name="apple-mobile-web-app-title" content="Kumi" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
     <!-- Los <link rel="apple-touch-startup-image"> los inyecta vite.config.ts -->
 
-    <title>Finanzas</title>
+    <title>Kumi</title>
   </head>
   <body>
     <div id="root"></div>
