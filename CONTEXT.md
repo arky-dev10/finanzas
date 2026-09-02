@@ -43,6 +43,10 @@ _Avoid_: inventar un gasto o ingreso para cuadrar el saldo
 Cuánta plata hay en una Cuenta en este momento, derivado de sus movimientos (ajustes incluidos). Verificable contra el banco. Una cuenta creada sin ajuste inicial queda con «saldo pendiente de configurar» y su saldo no se presenta como confiable.
 _Avoid_: disponible, balance
 
+**Ciclo mensual**:
+El «mes» de Kumi: arranca el día que el usuario elige (1–28) y se etiqueta por el mes calendario en que termina — con inicio el 28, «Septiembre» va del 28 de agosto al 27 de septiembre. Con inicio 1 es el mes calendario exacto. Todo agrupado mensual (presupuesto, gastos, historial, devoluciones) usa el ciclo; los saldos de cuentas no, porque no son mensuales.
+_Avoid_: mes calendario como sinónimo de mes, editar la fecha de un movimiento para «moverlo» de mes
+
 **En cuentas**:
 Total de saldos de las Cuentas calibradas del usuario. Una cuenta con saldo pendiente de configurar queda fuera de la suma — su saldo es desconocido, no cero — y el total se marca como incompleto. Es lo que muestra el Resumen mientras no existan compromisos ni deuda.
 _Avoid_: llamarlo Disponible, sumar cuentas sin calibrar como si valieran cero
