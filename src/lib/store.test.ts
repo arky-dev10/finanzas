@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { monthKey } from '@/lib/format'
 import {
   accountBalanceCents,
   addAdjustment,
   addTransaction,
   budgetStatus,
+  currentMonthKey,
   expenseByCategory,
   getAccount,
+  getData,
   monthTotals,
   monthlyBudgetStatus,
   replaceData,
+  setMonthStartDay,
   totalInAccounts,
   transactionsByMonth,
 } from '@/lib/store'
@@ -40,6 +44,7 @@ function sembrar(patch: Partial<Parameters<typeof replaceData>[0]> = {}) {
     categories: CATEGORIAS,
     transactions: MOVIMIENTOS,
     monthlyBudgetCents: 0,
+    monthStartDay: 1,
     onboarded: true,
     ...patch,
   })
@@ -229,6 +234,97 @@ describe('el medio se recuerda por cuenta', () => {
     const tx = transactionsByMonth('2026-08').find((t) => t.amountCents === 1500)!
     expect(tx.medium).toBeUndefined()
     expect(getAccount('a_cash')!.lastMedium).toBeUndefined()
+  })
+})
+
+/*
+ * El resto de la suite corre entera con `monthStartDay: 1` (lo fija `sembrar`):
+ * ESA es la regresión grande — con día 1 nada de lo de siempre cambia. Acá
+ * abajo se fija la identidad explícita y lo que pasa con el ciclo corrido.
+ */
+describe('ciclo mensual configurable', () => {
+  it('con día 1 el fin de mes se queda en su mes calendario (regresión)', () => {
+    sembrar({
+      transactions: [
+        { id: 'e31', amountCents: 1000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-31' },
+      ],
+    })
+    expect(monthTotals('2026-08').expense).toBe(1000)
+    expect(monthTotals('2026-09').expense).toBe(0)
+    // Y el "mes actual" es el mismo mes calendario de siempre.
+    expect(currentMonthKey()).toBe(monthKey())
+  })
+
+  it('con día 28 los últimos días de agosto pertenecen a septiembre', () => {
+    // El caso que motivó todo: gastos del 28-31 de agosto con sueldo del 28.
+    sembrar({
+      monthStartDay: 28,
+      transactions: [
+        { id: 'ago', amountCents: 4000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-27' },
+        { id: 'sep1', amountCents: 3000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-29' },
+        { id: 'sep2', amountCents: 2000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-09-10' },
+      ],
+    })
+    expect(transactionsByMonth('2026-08').map((t) => t.id)).toEqual(['ago'])
+    expect(transactionsByMonth('2026-09').map((t) => t.id)).toEqual(['sep2', 'sep1'])
+    expect(monthTotals('2026-08').expense).toBe(4000)
+    expect(monthTotals('2026-09').expense).toBe(5000)
+    expect(expenseByCategory('2026-09')).toEqual([{ categoryId: 'c_food', total: 5000 }])
+  })
+
+  it('mide el tope mensual contra el gasto de todo el ciclo', () => {
+    sembrar({
+      monthStartDay: 28,
+      monthlyBudgetCents: 10000,
+      transactions: [
+        { id: 'a', amountCents: 6000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-29' },
+        { id: 'b', amountCents: 3000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-09-10' },
+      ],
+    })
+    const s = monthlyBudgetStatus('2026-09')!
+    expect(s.spentCents).toBe(9000)
+    expect(s.remainingCents).toBe(1000)
+    expect(s.over).toBe(false)
+    // En agosto (que terminó el 27) no se gastó nada de este tope.
+    expect(monthlyBudgetStatus('2026-08')!.spentCents).toBe(0)
+  })
+
+  it('el presupuesto por categoría también mide el ciclo completo', () => {
+    sembrar({
+      monthStartDay: 28,
+      categories: [{ ...CATEGORIAS[0], budgetCents: 5000 }, ...CATEGORIAS.slice(1)],
+      transactions: [
+        { id: 'a', amountCents: 4000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-30' },
+        { id: 'b', amountCents: 2000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-09-05' },
+      ],
+    })
+    const [b] = budgetStatus('2026-09')
+    expect(b.spentCents).toBe(6000)
+    expect(b.over).toBe(true)
+  })
+
+  it('la devolución descuenta en su ciclo aunque cruce el cambio de mes calendario', () => {
+    // Gasto el 29-ago, devolución el 2-sep: mismo ciclo "Septiembre", así que
+    // el neto del ciclo la absorbe y agosto ni se entera.
+    sembrar({
+      monthStartDay: 28,
+      transactions: [
+        { id: 'e', amountCents: 5000, nature: 'expense', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-08-29' },
+        { id: 'r', amountCents: 2000, nature: 'refund', accountId: 'a_bcp', categoryId: 'c_food', date: '2026-09-02' },
+      ],
+    })
+    expect(monthTotals('2026-09').expense).toBe(3000)
+    expect(expenseByCategory('2026-09')).toEqual([{ categoryId: 'c_food', total: 3000 }])
+    expect(monthTotals('2026-08').expense).toBe(0)
+  })
+
+  it('setMonthStartDay acota el día a 1–28 y a enteros', () => {
+    setMonthStartDay(0)
+    expect(getData().monthStartDay).toBe(1)
+    setMonthStartDay(99)
+    expect(getData().monthStartDay).toBe(28)
+    setMonthStartDay(15.9)
+    expect(getData().monthStartDay).toBe(15)
   })
 })
 

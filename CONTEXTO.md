@@ -83,7 +83,7 @@ src/
 ├── types.ts                 # Account, Category, Transaction, TxNature, Medium
 ├── lib/
 │   ├── pwa.ts               # useInstall(): prompt de instalación + detección standalone
-│   ├── format.ts            # céntimos ↔ soles, meses, shiftMonth, sanitizeAmount
+│   ├── format.ts            # céntimos ↔ soles, meses, ciclo (monthKeyFor), sanitizeAmount
 │   ├── budget.ts            # estado de presupuesto (color + texto + icono) + tope por defecto
 │   ├── backup.ts            # serializar / validar / MIGRAR el JSON importado
 │   ├── routes.ts            # hidesNav(): rutas de formulario sin barra inferior
@@ -169,9 +169,39 @@ interface Data {
   categories: Category[]
   transactions: Transaction[]
   monthlyBudgetCents: number  // tope de todo el mes; 0 = sin tope
+  monthStartDay: number   // día en que empieza el mes del usuario (1–28); 1 = calendario
   onboarded: boolean      // si ya pasó por la bienvenida; NO va en el respaldo
 }
 ```
+
+### Ciclo mensual configurable
+
+Para quien cobra antes de fin de mes (el caso real: sueldo el 28), los gastos
+del 28 al 31 de agosto pertenecen a *su* septiembre — agrupar por mes calendario
+le "vaciaba" el Resumen al cambiar el mes. `monthStartDay` corrige eso:
+
+- El ciclo etiquetado "M" va del `monthStartDay` del mes M−1 al día
+  `monthStartDay − 1` del mes M, y **se etiqueta por el mes en que termina**
+  (es el mes cuyo sueldo se gasta). Con inicio 28, "Septiembre 2026" =
+  28-ago a 27-sep.
+- **`monthStartDay: 1` es identidad exacta con el mes calendario** — el
+  comportamiento de siempre, y el default de todo respaldo que no traiga el
+  campo. El rango válido es 1–28: del 29 al 31 hay meses (febrero) que no
+  llegan.
+- El nombre visible del mes no cambia ("Septiembre 2026"); cuando el inicio no
+  es 1, `MonthNav` muestra debajo un sublabel discreto con el rango
+  ("28 ago – 27 sep").
+- La pura aritmética vive en `lib/format.ts` (`monthKeyFor`, `cycleRange`,
+  `cycleSublabel`); el agrupado entra por `transactionsByMonth` y los demás
+  selectores mensuales lo heredan. El "mes actual" de la navegación es
+  `currentMonthKey()` (el ciclo donde cae hoy). Los saldos de cuentas no se
+  agrupan por mes: el ciclo no los toca.
+- **No subió `BACKUP_VERSION`**: es un campo aditivo con default seguro, no un
+  cambio de semántica de lectura como soles→céntimos (ver el comentario junto a
+  `BACKUP_VERSION`).
+- **Compatibilidad**: un dispositivo con la app vieja que sincronice o importe
+  un respaldo nuevo ignora el campo — sigue viendo meses calendario hasta
+  actualizar la app. No rompe nada; solo ve otro agrupado.
 
 ### Dirección no es naturaleza
 
@@ -203,11 +233,14 @@ contra la realidad en vez de inventar un gasto o un ingreso para cuadrar.
 - Acciones: `addTransaction`, `insertTransaction` (deshacer), `updateTransaction`,
   `deleteTransaction`, `addAdjustment` (calibrar una cuenta), `addCategory`,
   `updateCategory`, `deleteCategory` (devuelve lo borrado), `restoreCategory`,
-  `setMonthlyBudgetCents`, `replaceData` (importar, devuelve lo previo).
+  `setMonthlyBudgetCents`, `setMonthStartDay` (día de inicio del ciclo, 1–28),
+  `replaceData` (importar, devuelve lo previo).
 - Selectores: `transactionsByMonth`, `monthTotals`, `expenseByCategory`,
   `lastMonthsTotals`, `monthlyBudgetStatus` (tope global, `null` si no hay),
-  `budgetStatus` (por categoría), `accountBalanceCents`, `totalInAccounts`,
-  `signedCents`, `getCategory`, `getAccount`, `getTransaction`.
+  `budgetStatus` (por categoría), `currentMonthKey` (el ciclo donde cae hoy),
+  `accountBalanceCents`, `totalInAccounts`, `signedCents`, `getCategory`,
+  `getAccount`, `getTransaction`. Los selectores mensuales agrupan por **ciclo**
+  (`monthKeyFor`), no por mes calendario — con `monthStartDay: 1` es lo mismo.
 - **`totalInAccounts()`** devuelve `{ totalCents, reliable }` y es lo que el Resumen
   muestra como «En cuentas» — *no* como «Disponible», que queda reservado para cuando
   pueda descontar compromisos y deuda. Las cuentas con `balancePending` quedan **fuera

@@ -166,6 +166,35 @@ describe('parseData — estados que el modelo declara imposibles', () => {
   })
 })
 
+describe('parseData — día de inicio del ciclo', () => {
+  const conInicio = (monthStartDay: unknown) => ({
+    version: 4,
+    monthStartDay,
+    accounts: [],
+    categories: [],
+    transactions: [],
+  })
+
+  it('un respaldo sin el campo queda en mes calendario', () => {
+    // Todos los respaldos anteriores al ciclo configurable entran por acá.
+    expect(parseData(v2)!.monthStartDay).toBe(1)
+  })
+
+  it('conserva el día elegido y sobrevive al viaje de ida y vuelta', () => {
+    const d = parseData(conInicio(28))!
+    expect(d.monthStartDay).toBe(28)
+    expect(parseData(JSON.parse(serialize(d)))!.monthStartDay).toBe(28)
+  })
+
+  it('normaliza a mes calendario un valor que el modelo no admite', () => {
+    // Config, no plata: no amerita tirar el respaldo entero (mismo criterio
+    // que un tope mensual inválido, que cae a 0).
+    for (const raw of [0, 29, 3.5, '28', null, true]) {
+      expect(parseData(conInicio(raw))!.monthStartDay).toBe(1)
+    }
+  })
+})
+
 describe('parseData — datos inválidos', () => {
   it('rechaza basura en vez de romper la app al arrancar', () => {
     expect(parseData(null)).toBe(null)

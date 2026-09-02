@@ -16,7 +16,7 @@ const gasto = (id: string, cents: number): Transaction => ({
 })
 
 function datosLocales(txs: Transaction[]): Data {
-  return { accounts: CUENTAS, categories: CATEGORIAS, transactions: txs, monthlyBudgetCents: 0, onboarded: true }
+  return { accounts: CUENTAS, categories: CATEGORIAS, transactions: txs, monthlyBudgetCents: 0, monthStartDay: 1, onboarded: true }
 }
 
 /** Server de mentira: guarda un blob y una revisión, como el de verdad. */
