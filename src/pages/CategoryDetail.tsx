@@ -7,8 +7,8 @@ import { DEVOLUCION } from '@/components/colors'
 import { MonthNav } from '@/components/MonthNav'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
-import { formatMoney, monthKey, shiftMonth } from '@/lib/format'
-import { budgetStatus, getCategory, transactionsByMonth, useData } from '@/lib/store'
+import { formatMoney, shiftMonth } from '@/lib/format'
+import { budgetStatus, currentMonthKey, getCategory, transactionsByMonth, useData } from '@/lib/store'
 import type { Category, CategoryKind } from '@/types'
 
 const MESES_EVOLUCION = 6
@@ -44,14 +44,14 @@ export function CategoryDetail() {
   // mes pasado del Historial, por ejemplo) puede pasar `?mes=YYYY-MM` para
   // abrir directo en ese mes en vez de saltar siempre al mes actual.
   const mesParam = searchParams.get('mes')
-  const [month, setMonth] = useState(mesParam && MES_RE.test(mesParam) ? mesParam : monthKey())
+  const [month, setMonth] = useState(mesParam && MES_RE.test(mesParam) ? mesParam : currentMonthKey())
 
   if (!category) return <CategoriaNoEncontrada />
 
   const isExpense = category.type === 'expense'
   const spent = categoryTotal(month, category.id, category.type)
   const meses = Array.from({ length: MESES_EVOLUCION }, (_, i) => {
-    const m = shiftMonth(monthKey(), -(MESES_EVOLUCION - 1 - i))
+    const m = shiftMonth(currentMonthKey(), -(MESES_EVOLUCION - 1 - i))
     return { month: m, total: categoryTotal(m, category.id, category.type) }
   })
   const movimientos = transactionsByMonth(month).filter((t) => t.categoryId === category.id)

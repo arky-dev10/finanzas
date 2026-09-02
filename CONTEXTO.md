@@ -93,7 +93,7 @@ src/
 │   ├── AppLayout.tsx        # Shell: <Outlet/> + BottomNav
 │   ├── PwaUpdater.tsx       # Registra el SW y avisa "hay versión nueva"
 │   ├── BottomNav.tsx        # Barra de 4 items + FAB flotante abajo a la derecha
-│   ├── MonthNav.tsx         # ‹ mes › (tocar el mes vuelve al actual)
+│   ├── MonthNav.tsx         # ‹ mes › (tocar el mes vuelve al actual; muestra el rango del ciclo si no es calendario)
 │   ├── CategoryIcon.tsx     # Icono en cuadro con el color de la categoría
 │   ├── TransactionItem.tsx  # Fila: tap para editar, tacho con "Deshacer"
 │   ├── charts/
@@ -105,7 +105,7 @@ src/
     ├── AddTransaction.tsx   # Registrar y editar (/registrar y /registrar/:id)
     ├── Categories.tsx       # Categorías + presupuestos + colores/iconos
     ├── History.tsx          # Barras de meses + dona + lista del mes
-    └── Settings.tsx         # Instalar app + presupuesto mensual + respaldo JSON
+    └── Settings.tsx         # Instalar app + presupuesto mensual + ciclo mensual + respaldo JSON
 scripts/
 ├── apple-splash.ts          # Lista de pantallas iOS (la usan el generador y vite.config)
 └── generate-icons.ts        # Logo de Kumi → íconos, maskable, apple-touch, splashes
@@ -392,6 +392,8 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 - [x] Respaldo JSON: exportar (Web Share o descarga), copiar, importar con validación
 - [x] PWA de verdad: instalable, offline, con ícono propio (ver abajo)
 - [x] Bienvenida de un paso: el tope mensual lo elige el usuario, no la app
+- [x] Ciclo mensual configurable: "mi mes empieza el día N" (para quien cobra
+      antes de fin de mes), con el rango del ciclo visible en la navegación
 - [x] Verificado en navegador a 390×844 y 1280×900 con datos sembrados
       (los 3 estados del tope: 60% en rango, 89% casi al límite, 107% pasado)
 

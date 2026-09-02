@@ -6,8 +6,9 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { DonutChart, type Slice } from '@/components/charts/DonutChart'
 import { MonthlyBars } from '@/components/charts/MonthlyBars'
 import { CategoryIcon } from '@/components/CategoryIcon'
-import { formatMoney, monthKey } from '@/lib/format'
+import { formatMoney } from '@/lib/format'
 import {
+  currentMonthKey,
   expenseByCategory,
   getCategory,
   lastMonthsTotals,
@@ -23,12 +24,12 @@ export function History() {
   const navigate = useNavigate()
   // Sin esto la lista no se refrescaba al borrar un movimiento.
   useData()
-  const [month, setMonth] = useState(monthKey())
+  const [month, setMonth] = useState(currentMonthKey())
   const [selected, setSelected] = useState<string | null>(null)
 
   const totals = monthTotals(month)
   const txs = transactionsByMonth(month)
-  const months = lastMonthsTotals(6, monthKey())
+  const months = lastMonthsTotals(6, currentMonthKey())
   const porCategoria = expenseByCategory(month)
 
   /*

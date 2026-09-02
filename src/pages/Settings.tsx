@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { backupFilename, parseData, serialize } from '@/lib/backup'
-import { centsToInput, formatMoney, monthLabelCap, parseAmountToCents, sanitizeAmount } from '@/lib/format'
+import {
+  centsToInput, cycleSublabel, formatMoney, monthKeyFor, monthLabelCap, parseAmountToCents,
+  sanitizeAmount, todayISO,
+} from '@/lib/format'
 import { useInstall } from '@/lib/pwa'
-import { replaceData, resetData, setMonthlyBudgetCents, useData } from '@/lib/store'
+import { replaceData, resetData, setMonthlyBudgetCents, setMonthStartDay, useData } from '@/lib/store'
 import {
   getSyncState, link, resolveConflict, syncNow, unlink,
   type LinkMode, type SyncState,
@@ -104,6 +107,8 @@ export function Settings() {
 
       {/* `key` para que el input se re-sincronice tras importar o empezar de cero. */}
       <PresupuestoMensual key={data.monthlyBudgetCents} actual={data.monthlyBudgetCents} />
+
+      <CicloMensual key={data.monthStartDay} actual={data.monthStartDay} />
 
       <section className="surface flex flex-col gap-4 p-5">
         <h2 className="text-base font-semibold">Tus datos</h2>
@@ -291,6 +296,69 @@ function PresupuestoMensual({ actual }: { actual: number }) {
       </Button>
     </section>
   )
+}
+
+/**
+ * Día en que empieza el mes del usuario. Quien cobra el 28 registra los gastos
+ * del 28 al 31 "en septiembre": el ciclo se etiqueta por el mes en que termina,
+ * que es el mes cuyo sueldo se está gastando. Con 1 (el default) todo sigue
+ * siendo el mes calendario de siempre.
+ */
+function CicloMensual({ actual }: { actual: number }) {
+  const [valor, setValor] = useState(String(actual))
+
+  const dia = valor.trim() === '' ? null : Number(valor.trim())
+  const valido = dia !== null && Number.isInteger(dia) && dia >= 1 && dia <= 28
+
+  function guardar() {
+    if (!valido) {
+      toast.error('Elige un día entre 1 y 28')
+      return
+    }
+    setMonthStartDay(dia)
+    toast.success(
+      dia === 1 ? 'Tu mes vuelve a ser el mes calendario' : `Tu mes empieza el día ${dia}`,
+    )
+  }
+
+  const sinCambios = valor.trim() === String(actual)
+
+  return (
+    <section className="surface flex flex-col gap-3 p-5">
+      <h2 className="text-base font-semibold">Ciclo mensual</h2>
+      <div className="grid gap-2">
+        <Label htmlFor="inicio-mes">Mi mes empieza el día</Label>
+        <Input
+          id="inicio-mes"
+          inputMode="numeric"
+          maxLength={2}
+          placeholder="1"
+          value={valor}
+          onChange={(e) => setValor(e.target.value.replace(/\D/g, '').slice(0, 2))}
+          className="w-24"
+        />
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Útil si cobras antes de fin de mes: tu mes va de tu día de cobro al día anterior
+        del cobro siguiente. Con 1 es el mes calendario.
+      </p>
+      {valido && (
+        <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+          {previewCiclo(dia)}
+        </p>
+      )}
+      <Button onClick={guardar} disabled={sinCambios || !valido} className="h-11">
+        Guardar ciclo
+      </Button>
+    </section>
+  )
+}
+
+/** El ciclo donde caería hoy con el día tipeado: "Septiembre = 28 ago – 27 sep". */
+function previewCiclo(dia: number): string {
+  const ciclo = monthKeyFor(todayISO(), dia)
+  const rango = cycleSublabel(ciclo, dia)
+  return rango ? `${monthLabelCap(ciclo)} = ${rango}` : `${monthLabelCap(ciclo)} = mes calendario`
 }
 
 function Dato({ label, value }: { label: string; value: string }) {
