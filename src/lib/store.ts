@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { monthKey, shiftMonth, todayISO } from '@/lib/format'
+import { monthKeyFor, shiftMonth, todayISO } from '@/lib/format'
 import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
 import type { Account, Category, Medium, Transaction } from '@/types'
 
@@ -45,6 +45,7 @@ function initial(): Data {
     categories: DEFAULT_CATEGORIES,
     transactions: [],
     monthlyBudgetCents: 0,
+    monthStartDay: 1,
     onboarded: false,
   }
 }
@@ -117,6 +118,7 @@ export function replaceData(next: Data): Data {
     categories: next.categories,
     transactions: next.transactions,
     monthlyBudgetCents: next.monthlyBudgetCents,
+    monthStartDay: next.monthStartDay,
     onboarded: next.onboarded,
   })
   return previo
@@ -302,11 +304,32 @@ export function completeOnboarding(cents: number) {
   commit({ ...data, monthlyBudgetCents: Math.max(0, cents), onboarded: true })
 }
 
+/* ---------- ciclo mensual ---------- */
+
+/**
+ * Día en que empieza el mes del usuario (para quien cobra antes de fin de
+ * mes). Acotado a 1–28: del 29 al 31 hay meses que no llegan.
+ */
+export function setMonthStartDay(day: number) {
+  commit({ ...data, monthStartDay: Math.min(28, Math.max(1, Math.trunc(day))) })
+}
+
+/**
+ * El ciclo en el que cae hoy: el "mes actual" de toda la navegación. Con el
+ * inicio en 28, el 2 de septiembre estás parado en "Septiembre", que arrancó
+ * el 28 de agosto. Con inicio 1 es el mes calendario de siempre.
+ */
+export function currentMonthKey(): string {
+  return monthKeyFor(todayISO(), data.monthStartDay)
+}
+
 /* ---------- selectores ---------- */
 
 export function transactionsByMonth(month: string): Transaction[] {
+  // Agrupa por ciclo, no por mes calendario: los demás selectores mensuales
+  // (totales, categorías, presupuestos) heredan el ciclo pasando por acá.
   return data.transactions
-    .filter((t) => t.date.startsWith(month))
+    .filter((t) => monthKeyFor(t.date, data.monthStartDay) === month)
     .sort((a, b) => (a.date < b.date ? 1 : -1))
 }
 
@@ -343,8 +366,8 @@ export function expenseByCategory(month: string) {
     .sort((a, b) => b.total - a.total)
 }
 
-/** Totales de los últimos `count` meses, del más antiguo al más reciente. */
-export function lastMonthsTotals(count: number, endMonth: string = monthKey()) {
+/** Totales de los últimos `count` ciclos, del más antiguo al más reciente. */
+export function lastMonthsTotals(count: number, endMonth: string = currentMonthKey()) {
   const out: { month: string; income: number; expense: number }[] = []
   for (let i = count - 1; i >= 0; i--) {
     const month = shiftMonth(endMonth, -i)

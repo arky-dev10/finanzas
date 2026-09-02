@@ -77,6 +77,51 @@ export function shiftMonth(key: string, delta: number): string {
   return monthKey(new Date(y, m - 1 + delta, 1))
 }
 
+/* ---------- ciclo mensual configurable ---------- */
+
+/**
+ * Ciclo al que pertenece una fecha. El ciclo "M" va del `startDay` del mes
+ * M−1 al día `startDay − 1` del mes M, y se etiqueta por el mes en que
+ * TERMINA: es el mes cuyo sueldo se está gastando (quien cobra el 28 de
+ * agosto gasta desde ese día la plata de septiembre). Con `startDay` 1 el
+ * ciclo ES el mes calendario, idéntico al comportamiento de siempre.
+ */
+export function monthKeyFor(dateISO: string, startDay: number): string {
+  const month = dateISO.slice(0, 7)
+  if (startDay <= 1) return month
+  return Number(dateISO.slice(8, 10)) >= startDay ? shiftMonth(month, 1) : month
+}
+
+/** Días del mes calendario (`m` 1–12). A mano para no pasar por Date. */
+function daysInMonth(y: number, m: number): number {
+  if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28
+  return m === 4 || m === 6 || m === 9 || m === 11 ? 30 : 31
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** Primer y último día (ISO, inclusive) del ciclo etiquetado `key`. */
+export function cycleRange(key: string, startDay: number): { from: string; to: string } {
+  if (startDay <= 1) {
+    const [y, m] = key.split('-').map(Number)
+    return { from: `${key}-01`, to: `${key}-${pad2(daysInMonth(y, m))}` }
+  }
+  return {
+    from: `${shiftMonth(key, -1)}-${pad2(startDay)}`,
+    to: `${key}-${pad2(startDay - 1)}`,
+  }
+}
+
+/**
+ * Rango del ciclo para mostrar bajo el nombre del mes: "28 ago – 27 sep".
+ * Devuelve null con `startDay` 1: ahí el nombre del mes ya lo dice todo.
+ */
+export function cycleSublabel(key: string, startDay: number): string | null {
+  if (startDay <= 1) return null
+  const { from, to } = cycleRange(key, startDay)
+  return `${formatDate(from)} – ${formatDate(to)}`
+}
+
 export function todayISO(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

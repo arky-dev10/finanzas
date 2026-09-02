@@ -4,6 +4,13 @@ import type { Account, Category, Medium, Transaction, TxNature } from '@/types'
  * v4: `budget` y `monthlyBudget` pasan a `budgetCents`/`monthlyBudgetCents`.
  * v3: montos en céntimos, cuentas y naturalezas (ADR 0001).
  * v2 agregó `monthlyBudget`. Todos se siguen importando.
+ *
+ * `monthStartDay` (ciclo mensual) entró SIN subir la versión: el bump importa
+ * cuando cambia la semántica de LECTURA — como soles→céntimos, que sin
+ * `CENTS_SINCE` re-multiplicaría la plata por 100. Un campo aditivo con
+ * default seguro no la cambia: un respaldo viejo sin el campo se lee como 1
+ * (mes calendario, comportamiento idéntico) y una app vieja que reciba un
+ * respaldo nuevo simplemente lo ignora.
  */
 export const BACKUP_VERSION = 4
 
@@ -18,6 +25,7 @@ export interface Backup {
   version: number
   exportedAt: string
   monthlyBudgetCents: number
+  monthStartDay: number
   accounts: Account[]
   categories: Category[]
   transactions: Transaction[]
@@ -29,6 +37,13 @@ export interface Data {
   transactions: Transaction[]
   /** Tope de gasto de todo el mes, en céntimos. 0 = sin tope. */
   monthlyBudgetCents: number
+  /**
+   * Día en que empieza el mes del usuario (1–28; nunca 29–31, que a febrero
+   * no llegan). 1 = mes calendario. Con 28, "Septiembre" va del 28-ago al
+   * 27-sep: el ciclo se etiqueta por el mes en que TERMINA, que es el mes
+   * cuyo sueldo se gasta.
+   */
+  monthStartDay: number
   /**
    * Si ya pasó por la pantalla de bienvenida. No va en el respaldo: es estado
    * de la app, no plata. Sin esto, quien elige "Definirlo después" volvería a
@@ -213,6 +228,16 @@ function readMonthlyBudget(o: Record<string, unknown>, legacy: boolean): number 
 }
 
 /**
+ * Config, no plata: un valor que el modelo no admite (0, 29, un decimal, un
+ * string) se normaliza a 1 en vez de rechazar el respaldo entero — el mismo
+ * criterio que `readMonthlyBudget` con un tope inválido.
+ */
+function readMonthStartDay(o: Record<string, unknown>): number {
+  const raw = o.monthStartDay
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 && raw <= 28 ? raw : 1
+}
+
+/**
  * Valida datos que vienen de afuera (archivo importado o localStorage corrupto)
  * y los migra a v3 si hace falta. Acepta tanto el respaldo con `version` como
  * el `{categories, transactions}` crudo que guardaba la app.
@@ -252,6 +277,9 @@ export function parseData(raw: unknown): Data | null {
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
     // No inventamos un monto que el usuario no eligió.
     monthlyBudgetCents: readMonthlyBudget(o, legacy),
+    // Los respaldos anteriores al ciclo configurable no lo traían: mes
+    // calendario, como siempre.
+    monthStartDay: readMonthStartDay(o),
     // Tener datos guardados (o importar un respaldo) significa que no sos nuevo.
     onboarded: typeof o.onboarded === 'boolean' ? o.onboarded : true,
   }
@@ -262,6 +290,7 @@ export function toBackup(data: Data): Backup {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     monthlyBudgetCents: data.monthlyBudgetCents,
+    monthStartDay: data.monthStartDay,
     accounts: data.accounts,
     categories: data.categories,
     transactions: data.transactions,

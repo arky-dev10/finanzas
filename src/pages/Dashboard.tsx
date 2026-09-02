@@ -15,10 +15,11 @@ import { MonthNav } from '@/components/MonthNav'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
-import { formatMoney, monthKey, monthLabel, shiftMonth } from '@/lib/format'
+import { formatMoney, monthLabel, shiftMonth } from '@/lib/format'
 import {
   accountBalanceCents,
   budgetStatus,
+  currentMonthKey,
   expenseByCategory,
   getCategory,
   monthlyBudgetStatus,
@@ -61,7 +62,7 @@ interface Row {
 export function Dashboard() {
   const navigate = useNavigate()
   const { accounts } = useData()
-  const [month, setMonth] = useState(monthKey())
+  const [month, setMonth] = useState(currentMonthKey())
   const [verTodas, setVerTodas] = useState(false)
 
   const totals = monthTotals(month)
@@ -144,7 +145,7 @@ export function Dashboard() {
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="text-sm text-muted-foreground">
                   En cuentas
-                  {month !== monthKey() && <span className="ml-1.5 opacity-70">· hoy</span>}
+                  {month !== currentMonthKey() && <span className="ml-1.5 opacity-70">· hoy</span>}
                 </span>
                 <span className="text-[2.25rem] font-bold leading-none tracking-tight tabular-nums">
                   {formatMoney(totalCents)}
