@@ -52,5 +52,9 @@ Total de saldos de las Cuentas calibradas del usuario. Una cuenta con saldo pend
 _Avoid_: llamarlo Disponible, sumar cuentas sin calibrar como si valieran cero
 
 **Disponible**:
-Dinero que el usuario puede gastar realmente sin comprometer sus próximos pagos: parte de los saldos y descuenta compromisos y deuda futura. NO es la suma de saldos (eso es el total en cuentas) ni «ingresos − gastos del mes» (eso es el neto mensual, que hoy el Resumen llama «balance» por error de modelo).
-_Avoid_: balance (ambiguo entre saldo real y neto del mes)
+Dinero que el usuario puede gastar sin comprometer sus próximos pagos: En cuentas + ingresos esperados pendientes − pagos pendientes del ciclo (las ocurrencias sin monto se listan pero no suman). La deuda de tarjetas se descontará cuando existan (F3). Vive en el Calendario. NO es la suma de saldos (eso es En cuentas) ni «ingresos − gastos del mes» (eso es el neto).
+_Avoid_: balance (ambiguo), llamar Disponible al total en cuentas
+
+**Recordatorio de pago**:
+Pago o ingreso esperado (una vez o cada mes) con monto opcional. Marcarlo pagado nunca crea plata: solo el movimiento real la mueve — el flujo «Pagar» registra el movimiento y marca la ocurrencia. Una ocurrencia vencida se arrastra entre ciclos hasta pagarse: una deuda no desaparece al cambiar de mes.
+_Avoid_: recordatorio que genera movimientos automáticos, vencidas que se esfuman al cambiar de ciclo
