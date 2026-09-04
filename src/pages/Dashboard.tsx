@@ -16,7 +16,7 @@ import { MonthNav } from '@/components/MonthNav'
 import { CategoryIcon } from '@/components/CategoryIcon'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
-import { formatMoney, monthLabel, shiftMonth } from '@/lib/format'
+import { cycleRange, formatDate, formatMoney, monthLabel, shiftMonth } from '@/lib/format'
 import {
   accountBalanceCents,
   budgetStatus,
@@ -25,6 +25,7 @@ import {
   getCategory,
   monthlyBudgetStatus,
   monthTotals,
+  available,
   totalDebtCents,
   totalInAccounts,
   monthEntries,
@@ -63,7 +64,7 @@ interface Row {
  */
 export function Dashboard() {
   const navigate = useNavigate()
-  const { accounts } = useData()
+  const { accounts, monthStartDay } = useData()
   const [month, setMonth] = useState(currentMonthKey())
   const [verTodas, setVerTodas] = useState(false)
 
@@ -72,6 +73,13 @@ export function Dashboard() {
   const alertas = budgetStatus(month).filter((b) => b.pct >= ATENCION)
   const tope = monthlyBudgetStatus(month)
   const { totalCents, reliable } = totalInAccounts()
+  /*
+   * El Disponible estrena la palabra que el ADR 0001 reservó en su D7. Va
+   * arriba porque es la pregunta que la app existe para contestar: no «cuánto
+   * hay» sino «cuánto puedo gastar sin joderme». «En cuentas» no desaparece —
+   * baja al desglose, que es donde explica de dónde sale el número.
+   */
+  const disponible = available(month)
   /*
    * Solo las cuentas del usuario: una tarjeta de crédito guarda deuda, no
    * plata, y `totalInAccounts` la saltea. Listarla en el desglose mostraría
@@ -128,7 +136,7 @@ export function Dashboard() {
         {sinConfigurar ? (
           <div className="-mt-1 flex flex-col items-start gap-3">
             <div className="flex flex-col gap-1.5">
-              <span className="text-sm text-muted-foreground">En cuentas</span>
+              <span className="text-sm text-muted-foreground">Disponible</span>
               <h2 className="text-2xl font-bold leading-tight tracking-tight">
                 Falta configurar tus saldos
               </h2>
@@ -153,14 +161,40 @@ export function Dashboard() {
             <span className="flex items-start justify-between gap-3">
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="text-sm text-muted-foreground">
-                  En cuentas
+                  Disponible
                   {month !== currentMonthKey() && <span className="ml-1.5 opacity-70">· hoy</span>}
                 </span>
                 <span className="text-[2.25rem] font-bold leading-none tracking-tight tabular-nums">
-                  {formatMoney(totalCents)}
+                  {formatMoney(disponible.cents)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  hasta el {formatDate(cycleRange(currentMonthKey(), monthStartDay).to)}
                 </span>
               </span>
               <ChevronRight size={20} className="mt-1 shrink-0 text-muted-foreground" />
+            </span>
+
+            {/* De dónde sale: lo que hay, más lo que entra, menos lo que debe
+                salir. Sin esto el Disponible es un número que hay que creer. */}
+            <span className="mt-3 flex flex-col gap-1 border-t border-border pt-3 text-xs">
+              <Linea label="En cuentas" cents={totalCents} />
+              {disponible.incomingCents > 0 && (
+                <Linea label="Ingresos esperados" cents={disponible.incomingCents} signo="+" />
+              )}
+              {disponible.committedCents > 0 && (
+                <Linea
+                  label="Compromisos del ciclo"
+                  cents={-disponible.committedCents}
+                  signo="−"
+                />
+              )}
+              {disponible.unknownCount > 0 && (
+                <span className="text-muted-foreground/80">
+                  {disponible.unknownCount === 1
+                    ? 'Y 1 pago sin monto, que no suma.'
+                    : `Y ${disponible.unknownCount} pagos sin monto, que no suman.`}
+                </span>
+              )}
             </span>
 
             <span className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
@@ -181,9 +215,10 @@ export function Dashboard() {
             )}
 
             {/*
-              La deuda se muestra al lado, nunca restada: «En cuentas» es lo que
-              tenés. Descontarla acá sería estrenar el Disponible a medias, sin
-              los compromisos del ciclo que le faltan (ADR 0004, D8).
+              La deuda total sigue visible aparte: el Disponible descuenta lo
+              FACTURADO (por la vía del compromiso de la tarjeta) pero no el
+              consumo en curso, que se cobra el ciclo siguiente. Sin esta línea,
+              «lo que debo» desaparecería detrás de «lo que puedo gastar».
             */}
             {deuda.reliable && deuda.totalCents !== 0 && (
               <span className="mt-2 flex items-center gap-1.5 text-xs">
@@ -192,7 +227,13 @@ export function Dashboard() {
                 <span className="font-medium tabular-nums text-rose-600">
                   {formatMoney(deuda.totalCents)}
                 </span>
-                <span className="text-muted-foreground/70">· sin descontar</span>
+                {/* Lo facturado YA está descontado arriba, en los compromisos.
+                    Lo que falta descontar es el consumo que todavía no cierra. */}
+                <span className="text-muted-foreground/70">
+                  {deuda.totalCents > disponible.committedCents
+                    ? '· lo facturado ya está descontado'
+                    : '· ya descontado'}
+                </span>
               </span>
             )}
           </button>
@@ -487,5 +528,18 @@ function CategoryRow({ row, month }: { row: Row; month: string }) {
         )}
       </span>
     </button>
+  )
+}
+
+/** Una línea del desglose del Disponible: qué suma o resta, y cuánto. */
+function Linea({ label, cents, signo }: { label: string; cents: number; signo?: string }) {
+  return (
+    <span className="flex items-baseline justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium tabular-nums">
+        {signo}
+        {formatMoney(Math.abs(cents))}
+      </span>
+    </span>
   )
 }

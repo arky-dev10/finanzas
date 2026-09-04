@@ -21,8 +21,9 @@ Enfocada en ser **rápida de registrar**, **fácil de leer de un vistazo** y **f
 
 El Resumen responde cuatro preguntas, en este orden. Todo lo demás es navegación:
 
-1. **¿Cuánto dinero tengo?** — una sola tarjeta: balance + variación vs. mes anterior,
-   ingresos/gastos, y al pie el avance del tope del mes (% · barra · cuánto queda de cuánto).
+1. **¿Cuánto puedo gastar?** — una sola tarjeta: el **Disponible** (En cuentas + ingresos
+   esperados − compromisos del ciclo) con su desglose, los saldos por cuenta, la deuda de
+   tarjetas, ingresos/gastos del mes, y al pie el avance del tope (% · barra · cuánto queda).
 2. **¿En qué se me está yendo?** — top 3 categorías, con el resto colapsado.
 3. **¿Me pasé de algún presupuesto?** — **solo** aparece si una *categoría* llegó al 90% o se pasó.
 4. **¿Qué fue lo último que pasó?** — últimos 5 movimientos.
@@ -443,6 +444,9 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
 - [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
       con tarjeta de crédito cuenta el día de la compra, con su categoría
+- [x] «Disponible» estrenado (levanta la reserva del ADR 0001, D7): En cuentas
+      + ingresos esperados − compromisos que vencen en el ciclo. Es el número
+      de arriba del Resumen, con su desglose, y vive también en el Calendario
 - [x] Calendario (ADR 0003 + su enmienda): la grilla del ciclo con el rastro de
       lo gastado atrás y los compromisos adelante, recordatorios mensuales o de
       una vez con monto opcional, vencidas que se arrastran, y el flujo «Pagar»
@@ -461,9 +465,7 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 
 ### Pendiente / ideas
 
-El bloque 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
-
-- **Disponible**: el número nuevo del Resumen.
+Ya no queda nada del ADR 0004: los seis bloques están en main.
 
 - **Tema oscuro**: los tokens `.dark` ya existen en `index.css`, falta el toggle.
 - **Filtros en historial** por categoría o tipo.

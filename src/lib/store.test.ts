@@ -23,6 +23,7 @@ import {
   getData,
   lastUsedAccountId,
   addReminder,
+  available,
   markOccurrencePaid,
   monthEntries,
   occurrencesIn,
@@ -1031,7 +1032,7 @@ describe('recordatorios', () => {
 
   it('lista lo que toca en el ciclo, ordenado por fecha', () => {
     sembrarRecibos()
-    expect(occurrencesIn('2026-09', HOY).map((o) => [o.reminder.name, o.date])).toEqual([
+    expect(occurrencesIn('2026-09', HOY).map((o) => [o.name, o.date])).toEqual([
       ['Alquiler', '2026-09-01'],
       ['Luz', '2026-09-15'],
       ['Sueldo', '2026-09-28'],
@@ -1112,7 +1113,7 @@ describe('recordatorios', () => {
     sembrar({ transactions: [] })
     addReminder({ name: 'Agua', kind: 'expense', recurrence: 'monthly', day: 10, createdOn: DESDE })
     const [o] = occurrencesIn('2026-09', HOY)
-    expect(o.reminder.amountCents).toBeUndefined()
+    expect(o.amountCents).toBeUndefined()
     expect(o.date).toBe('2026-09-10')
   })
 })
@@ -1163,5 +1164,128 @@ describe('recordatorios: desde cuándo existen', () => {
 
     // Si al restaurar se pusiera "hoy", julio y agosto volverían como vencidos.
     expect(overdueOccurrences('2026-09-20').map((o) => o.date)).toEqual(['2026-08-10'])
+  })
+})
+
+/* ---------- Disponible (ADR 0004, D8) ---------- */
+
+describe('Disponible', () => {
+  const HOY = '2026-09-04'
+  const DESDE = '2026-09-01'
+
+  /** BCP 2,400 + Efectivo 180 = 2,580 en cuentas, las dos calibradas. */
+  function sembrarBase() {
+    sembrar({
+      accounts: [
+        { id: 'a_bcp', name: 'BCP', kind: 'bank' },
+        { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+      ],
+      transactions: [],
+    })
+    addAdjustment('a_bcp', 240000, '2026-07-01')
+    addAdjustment('a_cash', 18000, '2026-07-01')
+  }
+
+  it('descuenta los compromisos del ciclo de lo que hay en cuentas', () => {
+    sembrarBase()
+    addReminder({ name: 'Luz', kind: 'expense', recurrence: 'monthly', day: 10, amountCents: 12000, createdOn: DESDE })
+    addReminder({ name: 'Internet', kind: 'expense', recurrence: 'monthly', day: 15, amountCents: 8900, createdOn: DESDE })
+
+    const d = available('2026-09', HOY)
+    expect(d.inAccountsCents).toBe(258000)
+    expect(d.committedCents).toBe(20900)
+    expect(d.cents).toBe(237100)
+  })
+
+  it('suma los ingresos esperados que todavía no entraron', () => {
+    sembrarBase()
+    addReminder({ name: 'Sueldo', kind: 'income', recurrence: 'monthly', day: 28, amountCents: 320000, createdOn: DESDE })
+    const d = available('2026-09', HOY)
+    expect(d.incomingCents).toBe(320000)
+    expect(d.cents).toBe(258000 + 320000)
+  })
+
+  it('lo que ya se pagó deja de descontarse', () => {
+    sembrarBase()
+    const luz = addReminder({ name: 'Luz', kind: 'expense', recurrence: 'monthly', day: 10, amountCents: 12000, createdOn: DESDE })
+    markOccurrencePaid(luz.id, '2026-09-10')
+    expect(available('2026-09', HOY).cents).toBe(258000)
+  })
+
+  it('las ocurrencias sin monto se cuentan pero no se restan', () => {
+    sembrarBase()
+    addReminder({ name: 'Agua', kind: 'expense', recurrence: 'monthly', day: 22, createdOn: DESDE })
+    const d = available('2026-09', HOY)
+    expect(d.unknownCount).toBe(1)
+    expect(d.cents).toBe(258000)
+  })
+
+  it('una tarjeta sin nada facturado no ocupa lugar en el calendario', () => {
+    sembrarBase()
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 28, dueDay: 15 })
+    addAdjustment(visa.accountId, 0, '2026-07-01')
+    // Todo el consumo es posterior al cierre: no hay nada que pagar el 15.
+    addTransaction({
+      amountCents: 30000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-02',
+    })
+    expect(occurrencesIn('2026-09', HOY).some((o) => o.cardAccountId !== undefined)).toBe(false)
+  })
+
+  it('lo facturado de la tarjeta entra como un compromiso más, sin regla aparte', () => {
+    sembrarBase()
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 28, dueDay: 15 })
+    addAdjustment(visa.accountId, 0, '2026-07-01')
+    // Compra dentro del período que cerró el 28 de agosto: se paga el 15 sep.
+    addTransaction({
+      amountCents: 125000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-08-10',
+    })
+
+    const d = available('2026-09', HOY)
+    expect(d.committedCents).toBe(125000)
+    expect(d.cents).toBe(258000 - 125000)
+  })
+
+  it('el consumo en curso de la tarjeta NO se descuenta: se cobra el ciclo que viene', () => {
+    sembrarBase()
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 28, dueDay: 15 })
+    addAdjustment(visa.accountId, 0, '2026-07-01')
+    // Después del cierre del 28 de agosto: va al estado de cuenta de octubre.
+    addTransaction({
+      amountCents: 30000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-02',
+    })
+
+    const d = available('2026-09', HOY)
+    expect(d.committedCents).toBe(0)
+    expect(d.cents).toBe(258000)
+    // Pero la deuda existe y se ve: no está escondida, está sin descontar.
+    expect(totalDebtCents().totalCents).toBe(30000)
+  })
+
+  it('una vencida arrastrada sigue pesando: no se vuelve disponible al cambiar de mes', () => {
+    sembrarBase()
+    addReminder({ name: 'Alquiler', kind: 'expense', recurrence: 'monthly', day: 1, amountCents: 90000, createdOn: '2026-08-01' })
+    // La de agosto quedó sin pagar y la de septiembre también.
+    const d = available('2026-09', HOY)
+    expect(d.committedCents).toBe(180000)
+  })
+
+  it('sin cuentas calibradas el número no se presenta como confiable', () => {
+    sembrar({
+      accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank', balancePending: true }],
+      transactions: [],
+    })
+    expect(available('2026-09', HOY).reliable).toBe(false)
   })
 })

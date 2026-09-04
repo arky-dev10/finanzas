@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, CircleAlert, Plus } from 'lucide-react'
+import { Check, CircleAlert, CreditCard, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { MonthNav } from '@/components/MonthNav'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { CategoryIcon } from '@/components/CategoryIcon'
 import { nextDay } from '@/lib/cards'
 import { cycleRange, formatDate, formatMoney } from '@/lib/format'
 import {
+  available,
   currentMonthKey,
   getCategory,
   markOccurrencePaid,
@@ -85,9 +86,33 @@ export function Calendar() {
 
   const pendientes = ocurrencias.filter((o) => !o.paid)
 
+  /*
+   * El Disponible vive acá además del Resumen (ADR 0003, D3): el Resumen da el
+   * número y el Calendario, que es donde están los compromisos uno por uno,
+   * muestra de dónde sale. Solo en el ciclo actual — en otro sería un número
+   * de un momento que no es este.
+   */
+  const disponible = month === currentMonthKey() ? available(month, hoy) : null
+
   return (
     <div className="flex flex-col gap-4 px-4 pb-4 pt-nav">
       <MonthNav month={month} onChange={setMonth} />
+
+      {disponible !== null && (
+        <section className="surface flex items-baseline justify-between gap-3 p-4">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-sm text-muted-foreground">Disponible</span>
+            <span className="text-[11px] text-muted-foreground">
+              {disponible.committedCents > 0
+                ? `Ya descontados ${formatMoney(disponible.committedCents)} de compromisos`
+                : 'Sin compromisos pendientes en el ciclo'}
+            </span>
+          </div>
+          <span className="shrink-0 text-xl font-bold tabular-nums">
+            {disponible.reliable ? formatMoney(disponible.cents) : '—'}
+          </span>
+        </section>
+      )}
 
       <section className="surface p-4">
         <div className="mb-2 grid grid-cols-7 gap-1">
@@ -118,7 +143,7 @@ export function Calendar() {
       {vencidas.length > 0 && (
         <Group title="Vencido" tone="text-rose-600">
           {vencidas.map((o) => (
-            <OccurrenceRow key={`${o.reminder.id}-${o.date}`} o={o} />
+            <OccurrenceRow key={`${o.id}-${o.date}`} o={o} />
           ))}
         </Group>
       )}
@@ -145,7 +170,7 @@ export function Calendar() {
                 : 'Nada que pagar ni cobrar en este ciclo.'}
             </p>
           ) : (
-            ocurrencias.map((o) => <OccurrenceRow key={`${o.reminder.id}-${o.date}`} o={o} />)
+            ocurrencias.map((o) => <OccurrenceRow key={`${o.id}-${o.date}`} o={o} />)
           )}
         </div>
         {pendientes.length > 0 && (
@@ -218,27 +243,37 @@ function DayCell({ day, today, max }: { day: Day; today: string; max: number }) 
 /** Una fila del listado: qué toca, cuándo, y el único botón que mueve plata. */
 function OccurrenceRow({ o }: { o: Occurrence }) {
   const navigate = useNavigate()
-  const cat = o.reminder.categoryId ? getCategory(o.reminder.categoryId) : undefined
-  const esIngreso = o.reminder.kind === 'income'
+  const cat = o.categoryId ? getCategory(o.categoryId) : undefined
+  const esIngreso = o.kind === 'income'
+  // El pago de una tarjeta no se marca a mano: está saldado cuando no queda
+  // nada facturado, y eso ya lo dicen los movimientos.
+  const esTarjeta = o.cardAccountId !== undefined
 
   return (
     <div className="flex items-center gap-3 p-3">
       {cat ? (
         <CategoryIcon category={cat} size="sm" />
       ) : (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          {o.overdue ? <CircleAlert size={16} /> : <Check size={16} />}
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            esTarjeta ? 'bg-rose-50 text-rose-500' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {esTarjeta ? <CreditCard size={16} /> : o.overdue ? <CircleAlert size={16} /> : <Check size={16} />}
         </span>
       )}
       <button
-        onClick={() => navigate(`/recordatorios/${o.reminder.id}`)}
+        onClick={() =>
+          navigate(esTarjeta ? '/cuentas' : `/recordatorios/${o.id}`)
+        }
         className="min-w-0 flex-1 text-left"
       >
         <span className={`block truncate text-sm font-medium ${o.paid ? 'line-through opacity-60' : ''}`}>
-          {o.reminder.name}
+          {o.name}
         </span>
         <span className="block truncate text-xs text-muted-foreground">
           {formatDate(o.date)}
+          {esTarjeta ? ' · tarjeta' : ''}
           {o.overdue && !o.paid ? ' · vencido' : ''}
           {o.paid ? ' · pagado' : ''}
         </span>
@@ -251,42 +286,50 @@ function OccurrenceRow({ o }: { o: Occurrence }) {
           }`}
         >
           {/* Sin monto se lista igual: no le inventamos uno (ADR 0003, D3). */}
-          {o.reminder.amountCents === undefined
+          {o.amountCents === undefined
             ? '—'
-            : `${esIngreso ? '+' : ''}${formatMoney(o.reminder.amountCents)}`}
+            : `${esIngreso ? '+' : ''}${formatMoney(o.amountCents)}`}
         </span>
         {o.paid ? (
-          <button
-            onClick={() => {
-              unmarkOccurrencePaid(o.reminder.id, o.date)
-              toast('Marcado como pendiente de nuevo')
-            }}
-            className="text-[11px] text-muted-foreground"
-          >
-            Deshacer
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
+          esTarjeta ? null : (
             <button
               onClick={() => {
-                markOccurrencePaid(o.reminder.id, o.date)
-                toast(`${o.reminder.name} marcado`, {
-                  description: 'No se registró ningún movimiento: solo el real mueve la plata.',
-                  action: {
-                    label: 'Deshacer',
-                    onClick: () => unmarkOccurrencePaid(o.reminder.id, o.date),
-                  },
-                })
+                unmarkOccurrencePaid(o.id, o.date)
+                toast('Marcado como pendiente de nuevo')
               }}
               className="text-[11px] text-muted-foreground"
             >
-              Marcar
+              Deshacer
             </button>
+          )
+        ) : (
+          <div className="flex items-center gap-2">
+            {!esTarjeta && (
+              <button
+                onClick={() => {
+                  markOccurrencePaid(o.id, o.date)
+                  toast(`${o.name} marcado`, {
+                    description: 'No se registró ningún movimiento: solo el real mueve la plata.',
+                    action: {
+                      label: 'Deshacer',
+                      onClick: () => unmarkOccurrencePaid(o.id, o.date),
+                    },
+                  })
+                }}
+                className="text-[11px] text-muted-foreground"
+              >
+                Marcar
+              </button>
+            )}
             <Button
               size="sm"
               variant="ghost"
               onClick={() =>
-                navigate(`/registrar?recordatorio=${o.reminder.id}&fecha=${o.date}`)
+                navigate(
+                  esTarjeta
+                    ? `/registrar?pagar=${o.cardAccountId}&monto=${o.amountCents ?? 0}`
+                    : `/registrar?recordatorio=${o.id}&fecha=${o.date}`,
+                )
               }
               className="h-7 px-2 text-xs"
               style={{ color: LINK }}

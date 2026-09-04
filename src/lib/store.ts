@@ -9,6 +9,7 @@ import type {
   Category,
   Medium,
   Reminder,
+  ReminderKind,
   Transaction,
   Wallet,
   WalletProvider,
@@ -833,15 +834,29 @@ export function getReminder(id: string): Reminder | undefined {
 }
 
 /**
- * Una vez que toca un recordatorio: qué día, si ya se saldó, y si viene
+ * Una vez que toca pagar o cobrar: qué día, cuánto, si ya se saldó y si viene
  * arrastrada de un ciclo anterior.
+ *
+ * Sale de un recordatorio o de una tarjeta de crédito. La tarjeta no guarda un
+ * recordatorio: su pago se DERIVA de su ciclo (ADR 0004, D4), así que no hay
+ * que mantener sincronizados un recordatorio y un estado de cuenta que ya se
+ * calcula solo.
  */
 export interface Occurrence {
-  reminder: Reminder
+  /** Identifica la ocurrencia: el id del recordatorio, o `card:<cuenta>`. */
+  id: string
+  name: string
+  kind: ReminderKind
+  /** Sin monto se lista pero no suma: no le inventamos uno (ADR 0003, D3). */
+  amountCents?: number
+  categoryId?: string
   date: string
   paid: boolean
   /** Venció sin pagarse: se arrastra hasta que se pague (ADR 0003, D2). */
   overdue: boolean
+  reminder?: Reminder
+  /** La cuenta de la tarjeta, cuando es el pago de una. */
+  cardAccountId?: string
 }
 
 function occurrenceIn(reminder: Reminder, from: string, to: string, today: string): Occurrence | null {
@@ -855,18 +870,58 @@ function occurrenceIn(reminder: Reminder, from: string, to: string, today: strin
   // usuario un recibo de un mes en que la app ni sabía del recordatorio.
   if (date === null || date < reminder.createdOn) return null
   const paid = reminder.paidOn.includes(date)
-  return { reminder, date, paid, overdue: !paid && date < today }
+  return {
+    id: reminder.id,
+    name: reminder.name,
+    kind: reminder.kind,
+    amountCents: reminder.amountCents,
+    categoryId: reminder.categoryId,
+    date,
+    paid,
+    overdue: !paid && date < today,
+    reminder,
+  }
+}
+
+/**
+ * El pago de una tarjeta como ocurrencia del calendario. No hay que marcarla:
+ * está pagada cuando no queda nada facturado, y eso lo dicen los movimientos.
+ * Así el Disponible descuenta la deuda de tarjeta por la misma vía que todo lo
+ * demás, sin una regla aparte (ADR 0004, D8).
+ */
+function cardOccurrence(account: Account, from: string, to: string, today: string): Occurrence | null {
+  const status = creditCardStatus(account.id, today)
+  if (status === null) return null
+  const { dueDate } = status.cycle
+  // Sin nada facturado no hay compromiso: una fila en «S/ 0.00 · pagado» no
+  // dice nada que la ausencia no diga mejor, y ensucia la lista todos los meses.
+  if (status.billedCents === 0) return null
+  if (dueDate < from || dueDate > to) return null
+  return {
+    id: `card:${account.id}`,
+    name: account.name,
+    kind: 'expense',
+    amountCents: status.billedCents,
+    date: dueDate,
+    paid: false,
+    overdue: dueDate < today,
+    cardAccountId: account.id,
+  }
 }
 
 /** Lo que toca en un ciclo, ordenado por fecha. No incluye lo arrastrado. */
 export function occurrencesIn(month: string, today: string = todayISO()): Occurrence[] {
   const { from, to } = cycleRange(month, data.monthStartDay)
-  return data.reminders
-    .flatMap((r) => {
-      const o = occurrenceIn(r, from, to, today)
-      return o === null ? [] : [o]
-    })
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
+  const deRecordatorios = data.reminders.flatMap((r) => {
+    const o = occurrenceIn(r, from, to, today)
+    return o === null ? [] : [o]
+  })
+  const deTarjetas = data.accounts.flatMap((a) => {
+    if (a.kind !== 'credit') return []
+    const o = cardOccurrence(a, from, to, today)
+    return o === null ? [] : [o]
+  })
+  return [...deRecordatorios, ...deTarjetas].sort((a, b) => (a.date < b.date ? -1 : 1))
 }
 
 /**
@@ -890,6 +945,64 @@ export function overdueOccurrences(today: string = todayISO()): Occurrence[] {
     }
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+/**
+ * El Disponible: cuánto se puede gastar sin comprometer los próximos pagos.
+ * Estrena la palabra que el ADR 0001 reservó en su D7 para este momento.
+ *
+ *   Disponible = En cuentas + ingresos esperados − compromisos del ciclo
+ *
+ * Solo descuenta lo que vence EN ESTE CICLO, vencidas arrastradas incluidas. El
+ * consumo en curso de una tarjeta queda fuera: se cobra el ciclo siguiente y se
+ * descontará cuando cierre. Castigarlo hoy sería restar por adelantado algo que
+ * se paga en siete semanas (ADR 0004, D8).
+ *
+ * Las ocurrencias sin monto se cuentan pero no se suman: `unknownCount` deja
+ * decir «y además hay 2 sin monto» en vez de inventarles una cifra.
+ */
+export interface Available {
+  cents: number
+  inAccountsCents: number
+  incomingCents: number
+  committedCents: number
+  unknownCount: number
+  /** Hereda la confiabilidad de «En cuentas»: sin calibrar, el número tampoco. */
+  reliable: boolean
+}
+
+export function available(
+  month: string = currentMonthKey(),
+  today: string = todayISO(),
+): Available {
+  const { totalCents: inAccountsCents, reliable } = totalInAccounts()
+  let incomingCents = 0
+  let committedCents = 0
+  let unknownCount = 0
+
+  // Las vencidas de ciclos anteriores pesan igual: una deuda no desaparece al
+  // cambiar de mes, y seguir contándolas como disponibles sería mentir dos veces.
+  const pendientes = [...occurrencesIn(month, today), ...overdueOccurrences(today)].filter(
+    (o) => !o.paid,
+  )
+  for (const o of pendientes) {
+    if (o.amountCents === undefined) {
+      unknownCount++
+    } else if (o.kind === 'income') {
+      incomingCents += o.amountCents
+    } else {
+      committedCents += o.amountCents
+    }
+  }
+
+  return {
+    cents: inAccountsCents + incomingCents - committedCents,
+    inAccountsCents,
+    incomingCents,
+    committedCents,
+    unknownCount,
+    reliable,
+  }
 }
 
 /**
