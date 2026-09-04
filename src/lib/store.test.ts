@@ -18,6 +18,7 @@ import {
   getAccount,
   getCard,
   getData,
+  lastUsedAccountId,
   monthTotals,
   monthlyBudgetStatus,
   replaceData,
@@ -563,5 +564,30 @@ describe('billeteras Yape / Plin', () => {
   it('walletFor no adivina cuando el usuario no declaró su Yape', () => {
     sembrar({ transactions: [] })
     expect(walletFor('yape')).toBeUndefined()
+  })
+})
+
+describe('cuenta preseleccionada al registrar', () => {
+  it('un ajuste no convierte a su cuenta en la próxima por defecto', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    addTransaction({
+      amountCents: 4500,
+      nature: 'expense',
+      accountId: 'a_bcp',
+      categoryId: 'c_food',
+      date: '2026-09-02',
+    })
+    const visa = addCreditCard({ name: 'Visa BCP' })
+
+    // Calibrar la deuda es lo último que pasó, pero no es "usar" la tarjeta:
+    // si mandara, el siguiente gasto se iría a crédito sin pedirlo.
+    addAdjustment(visa.accountId, -48000)
+    expect(lastUsedAccountId()).toBe('a_bcp')
+  })
+
+  it('sin movimientos reales no hay última cuenta usada', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    addAdjustment('a_bcp', 100000)
+    expect(lastUsedAccountId()).toBeUndefined()
   })
 })

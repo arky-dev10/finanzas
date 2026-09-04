@@ -113,9 +113,10 @@ scripts/
 
 ### Modelo de datos
 
-El *porqué* de este modelo está en `docs/adr/0001-modelo-financiero.md`, y el
-vocabulario exacto (cuenta, medio, movimiento, naturaleza, saldo, «en cuentas»)
-en `CONTEXT.md`. Acá va solo la forma.
+El *porqué* de este modelo está en `docs/adr/0001-modelo-financiero.md` y
+`docs/adr/0004-tarjetas-y-deuda.md`, y el vocabulario exacto (cuenta, tarjeta,
+medio, movimiento, naturaleza, saldo, deuda, línea, «en cuentas») en
+`CONTEXT.md`. Acá va solo la forma.
 
 **Toda la plata son céntimos enteros** (S/ 12.50 = `1250`). Los soles existen
 solo como el string que el usuario tipea: entran con `parseAmountToCents` y
@@ -129,18 +130,51 @@ que avisa. Los dos bugs de ×100 que hubo en este modelo salieron justo de campo
 que guardaban céntimos sin decirlo en el nombre.
 
 ```ts
-type AccountKind = 'bank' | 'cash'
+type AccountKind = 'bank' | 'cash' | 'credit'
 type Medium = 'yape' | 'plin' | 'card' | 'transfer' | 'other'
 type TxNature = 'expense' | 'income' | 'refund' | 'adjustment'
 type CategoryKind = 'expense' | 'income'
+type CardKind = 'debit' | 'credit'
+type CardBrand = 'visa' | 'mastercard' | 'amex' | 'diners'
+type WalletProvider = 'yape' | 'plin'
 
-// Donde vive la plata. Yape y Plin NO son cuentas: son medios.
+// Donde vive la plata. Yape y Plin NO son cuentas: son medios (Wallet).
+// `credit` es la excepción: guarda DEUDA, no plata del usuario, y por eso
+// `totalInAccounts` la saltea. Su saldo es negativo por naturaleza.
 interface Account {
   id: string
   name: string
   kind: AccountKind
   balancePending?: true   // sin ajuste inicial: su saldo no es confiable
   lastMedium?: Medium     // default recordado, se actualiza al registrar
+  issuer?: string         // emisor peruano; catálogo abierto (lib/issuers.ts)
+  creditLimitCents?: number  // solo credit: la línea aprobada
+  closingDay?: number     // solo credit: día de cierre  (1–31, no 1–28)
+  dueDay?: number         // solo credit: día de pago    (1–31, no 1–28)
+}
+
+// Llave para llegar a una cuenta, NO un lugar donde vive la plata.
+// Débito → una cuenta `bank` que ya existe (sin saldo propio).
+// Crédito → su cuenta `credit`, creada y borrada junto con ella.
+// La cuenta guarda los hechos de plata; la tarjeta, los de identidad.
+interface Card {
+  id: string
+  name: string
+  kind: CardKind
+  accountId: string
+  brand?: CardBrand
+  last4?: string   // 4 dígitos; el número completo NUNCA se guarda
+}
+
+// Yape/Plin con origen declarado: al elegirlos en Registrar, Kumi ya sabe de
+// qué cuenta sale la plata. `accountId` es la verdad y `cardId` la etiqueta —
+// cuando hay tarjeta, el store DERIVA la cuenta de ella para que no discrepen.
+interface Wallet {
+  id: string
+  name: string
+  provider: WalletProvider
+  accountId: string
+  cardId?: string
 }
 
 interface Category {
@@ -159,6 +193,7 @@ interface Transaction {
   accountId: string
   categoryId?: string  // obligatorio salvo en adjustment
   medium?: Medium      // nunca en cuentas cash
+  cardId?: string      // con qué tarjeta; es una etiqueta, no mueve el saldo
   date: string         // YYYY-MM-DD
   note?: string
 }
@@ -166,6 +201,8 @@ interface Transaction {
 // lo que vive en localStorage y en el respaldo
 interface Data {
   accounts: Account[]
+  cards: Card[]        // v5, aditivo
+  wallets: Wallet[]    // v5, aditivo
   categories: Category[]
   transactions: Transaction[]
   monthlyBudgetCents: number  // tope de todo el mes; 0 = sin tope
@@ -396,8 +433,24 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       antes de fin de mes), con el rango del ciclo visible en la navegación
 - [x] Verificado en navegador a 390×844 y 1280×900 con datos sembrados
       (los 3 estados del tope: 60% en rango, 89% casi al límite, 107% pasado)
+- [x] Cuentas y tarjetas propias: crear, editar y borrar cuentas (antes solo
+      existían las dos sembradas), tarjetas de débito y de crédito con su línea
+      y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
+- [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
+      con tarjeta de crédito cuenta el día de la compra, con su categoría
 
 ### Pendiente / ideas
+
+Los bloques 2 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
+
+- **Transferencias** (`nature: 'transfer'`, el F1c del ADR 0001): pagar la
+  tarjeta y el retiro de cajero, que hoy no tienen forma honesta de registrarse.
+- **Tarjeta viva**: facturado vs. consumo en curso a partir de `closingDay`
+  (recortando el día al último del mes), «por pagar y cuándo», conciliación
+  contra el estado de cuenta real y flujo Pagar.
+- **Cuotas**: plan en el movimiento, peso por ciclo en el presupuesto, «vas 3 de 12».
+- **Calendario y recordatorios** (ADR 0003 + su enmienda).
+- **Disponible**: el número nuevo del Resumen.
 
 - **Tema oscuro**: los tokens `.dark` ya existen en `index.css`, falta el toggle.
 - **Filtros en historial** por categoría o tipo.

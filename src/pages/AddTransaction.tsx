@@ -1,15 +1,25 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Landmark, Wallet } from 'lucide-react'
+import { ArrowLeft, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CategoryIcon } from '@/components/CategoryIcon'
-import { addTransaction, getTransaction, updateTransaction, useData } from '@/lib/store'
+import {
+  addTransaction,
+  cardsForAccount,
+  getTransaction,
+  lastUsedAccountId,
+  updateTransaction,
+  useData,
+  walletFor,
+} from '@/lib/store'
 import { centsToInput, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/backup'
 import type { Account, Medium, TxNature } from '@/types'
+
+const ACCOUNT_ICON = { bank: Landmark, cash: Wallet, credit: CreditCard } as const
 
 /** Las naturalezas que se eligen acá. El ajuste no: se crea desde Cuentas. */
 type Nature = Exclude<TxNature, 'adjustment'>
@@ -31,7 +41,7 @@ const MEDIA: { id: Medium; label: string }[] = [
 export function AddTransaction() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { accounts, categories, transactions } = useData()
+  const { accounts, categories } = useData()
   const existing = id ? getTransaction(id) : undefined
   const isEdit = Boolean(id)
 
@@ -42,16 +52,21 @@ export function AddTransaction() {
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
   const [date, setDate] = useState(existing?.date ?? todayISO())
   const [note, setNote] = useState(existing?.note ?? '')
-  // Cuenta: la del movimiento en edición, o la última usada (D1 del ADR).
+  // Cuenta: la del movimiento en edición, o la última usada (D1 del ADR 0001).
   const [accountId, setAccountId] = useState(
-    existing?.accountId ?? transactions[0]?.accountId ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
+    existing?.accountId ?? lastUsedAccountId() ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
   )
   const account = accounts.find((a) => a.id === accountId) ?? accounts[0]
   // Medio: el de la cuenta en edición, el último de la cuenta, o Yape por
   // defecto en una cuenta bancaria nueva — el caso común es Yape (ver ADR).
   const [medium, setMedium] = useState<Medium | undefined>(
-    existing?.medium ?? account?.lastMedium ?? (account?.kind === 'bank' ? 'yape' : undefined),
+    existing?.medium ?? defaultMedium(account),
   )
+  const [cardId, setCardId] = useState<string | undefined>(existing?.cardId)
+
+  // Las tarjetas que abren la cuenta elegida. En una de crédito es una sola —
+  // la suya— y no hay nada que elegir; en un banco pueden ser varias.
+  const tarjetas = cardsForAccount(accountId).filter((c) => c.kind === 'debit')
 
   // La devolución usa las categorías de gasto: resta de ese gasto, no es un ingreso.
   const cats = useMemo(
@@ -81,7 +96,24 @@ export function AddTransaction() {
 
   function selectAccount(a: Account) {
     setAccountId(a.id)
-    setMedium(a.lastMedium ?? (a.kind === 'bank' ? 'yape' : undefined))
+    setMedium(a.lastMedium ?? defaultMedium(a))
+    // La tarjeta de la cuenta anterior no abre esta: se cae con el cambio. En
+    // una de crédito la tarjeta es la suya y no hay nada que elegir.
+    setCardId(a.kind === 'credit' ? cardsForAccount(a.id)[0]?.id : undefined)
+  }
+
+  /**
+   * Elegir Yape o Plin también elige la cuenta, si el usuario declaró de dónde
+   * sale (ADR 0004, D9): con dos bancos, "pagué por Yape" no dice de cuál salió.
+   * Sin billetera declarada no toca nada — no adivina por él.
+   */
+  function selectMedium(m: Medium) {
+    setMedium(m)
+    if (m !== 'yape' && m !== 'plin') return
+    const wallet = walletFor(m)
+    if (wallet === undefined || wallet.accountId === accountId) return
+    setAccountId(wallet.accountId)
+    setCardId(undefined)
   }
 
   function submit() {
@@ -100,7 +132,8 @@ export function AddTransaction() {
       nature,
       accountId,
       categoryId,
-      medium: account?.kind === 'bank' ? medium : undefined,
+      medium: account?.kind === 'cash' ? undefined : medium,
+      cardId,
       date,
       note: note.trim() || undefined,
     }
@@ -180,40 +213,75 @@ export function AddTransaction() {
       </div>
 
       <div className="mb-5 flex flex-col gap-2.5">
-        <span className="text-xs font-medium text-muted-foreground">Cuenta</span>
-        <div className="flex gap-2">
-          {accounts.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => selectAccount(a)}
-              className={`flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition ${
-                accountId === a.id
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : 'border-border text-muted-foreground'
-              }`}
-            >
-              {a.kind === 'bank' ? <Landmark size={15} /> : <Wallet size={15} />}
-              {a.name}
-            </button>
-          ))}
-        </div>
-
-        {account?.kind === 'bank' && (
-          <div className="flex flex-wrap gap-1.5">
-            {MEDIA.map((m) => (
+        <span className="text-xs font-medium text-muted-foreground">Cuenta o tarjeta</span>
+        <div className="flex flex-wrap gap-2">
+          {accounts.map((a) => {
+            const Icon = ACCOUNT_ICON[a.kind]
+            return (
               <button
-                key={m.id}
-                onClick={() => setMedium(m.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  medium === m.id
+                key={a.id}
+                onClick={() => selectAccount(a)}
+                className={`flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition ${
+                  accountId === a.id
                     ? 'border-accent bg-accent text-accent-foreground'
                     : 'border-border text-muted-foreground'
                 }`}
               >
-                {m.label}
+                <Icon size={15} />
+                {a.name}
               </button>
-            ))}
-          </div>
+            )
+          })}
+        </div>
+
+        {/* En una tarjeta de crédito no hay medio que elegir —fue con la tarjeta—
+            y el gasto no sale de una cuenta: sube la deuda. Vale decirlo acá, que
+            es donde el usuario está por confirmarlo. */}
+        {account?.kind === 'credit' && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {nature === 'expense'
+              ? 'Cuenta como gasto hoy, con su categoría, y suma a tu deuda. Pagar la tarjeta después no vuelve a contarlo.'
+              : 'Baja tu deuda con esta tarjeta.'}
+          </p>
+        )}
+
+        {account?.kind === 'bank' && (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {MEDIA.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => selectMedium(m.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    medium === m.id
+                      ? 'border-accent bg-accent text-accent-foreground'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {medium === 'card' && tarjetas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tarjetas.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCardId(cardId === c.id ? undefined : c.id)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                      cardId === c.id
+                        ? 'border-accent bg-accent text-accent-foreground'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    {c.name}
+                    {c.last4 === undefined ? '' : ` •${c.last4}`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -246,4 +314,14 @@ export function AddTransaction() {
       </div>
     </div>
   )
+}
+
+/**
+ * Yape en una cuenta bancaria (el caso común, ver ADR 0001) y tarjeta en una de
+ * crédito, donde no hay otra forma de haber pagado. El efectivo no lleva medio:
+ * la plata en mano no se mueve por un canal.
+ */
+function defaultMedium(account: Account | undefined): Medium | undefined {
+  if (account?.kind === 'bank') return 'yape'
+  return account?.kind === 'credit' ? 'card' : undefined
 }

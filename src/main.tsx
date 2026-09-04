@@ -6,6 +6,8 @@ import { AppLayout } from '@/components/AppLayout'
 import { PwaUpdater } from '@/components/PwaUpdater'
 import { Toaster } from '@/components/ui/sonner'
 import { Accounts } from '@/pages/Accounts'
+import { AccountForm } from '@/pages/AccountForm'
+import { CardForm } from '@/pages/CardForm'
 import { Dashboard } from '@/pages/Dashboard'
 import { AddTransaction } from '@/pages/AddTransaction'
 import { Categories } from '@/pages/Categories'
@@ -27,6 +29,10 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/categorias" element={<Categories />} />
           <Route path="/categoria/:id" element={<CategoryDetail />} />
           <Route path="/cuentas" element={<Accounts />} />
+          <Route path="/cuentas/nueva" element={<AccountForm />} />
+          <Route path="/cuentas/:id" element={<AccountForm />} />
+          <Route path="/tarjetas/nueva" element={<CardForm />} />
+          <Route path="/tarjetas/:id" element={<CardForm />} />
           <Route path="/historial" element={<History />} />
           <Route path="/ajustes" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

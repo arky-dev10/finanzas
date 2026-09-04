@@ -244,6 +244,16 @@ export function totalInAccounts(): { totalCents: number; reliable: boolean } {
   return { totalCents, reliable }
 }
 
+/**
+ * La cuenta del último movimiento REAL, para preseleccionarla al registrar
+ * (D1 del ADR 0001). Los ajustes no cuentan como uso: calibrar un saldo no es
+ * gastar ahí. Sin el filtro, ajustar la deuda de una tarjeta la dejaba de
+ * default y el siguiente gasto se iba a crédito sin que nadie lo pidiera.
+ */
+export function lastUsedAccountId(): string | undefined {
+  return data.transactions.find((t) => t.nature !== 'adjustment')?.accountId
+}
+
 /* ---------- deuda ---------- */
 
 /**

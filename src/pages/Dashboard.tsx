@@ -5,6 +5,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
+  CreditCard,
   CheckCircle2,
   ChevronRight,
   Landmark,
@@ -24,6 +25,7 @@ import {
   getCategory,
   monthlyBudgetStatus,
   monthTotals,
+  totalDebtCents,
   totalInAccounts,
   transactionsByMonth,
   useData,
@@ -70,13 +72,20 @@ export function Dashboard() {
   const alertas = budgetStatus(month).filter((b) => b.pct >= ATENCION)
   const tope = monthlyBudgetStatus(month)
   const { totalCents, reliable } = totalInAccounts()
-  const pendientes = accounts.filter((a) => a.balancePending)
+  /*
+   * Solo las cuentas del usuario: una tarjeta de crédito guarda deuda, no
+   * plata, y `totalInAccounts` la saltea. Listarla en el desglose mostraría
+   * una línea que no está en la suma de arriba (ADR 0004, D1).
+   */
+  const propias = accounts.filter((a) => a.kind !== 'credit')
+  const pendientes = propias.filter((a) => a.balancePending)
+  const deuda = totalDebtCents()
   /*
    * Recién migrado, ninguna cuenta tiene saldo configurado: el total no es
    * S/ 0.00, es desconocido. Mostrar un cero sería la primera mentira que ve
    * el usuario, así que la tarjeta cambia de cara y pide lo que le falta.
    */
-  const sinConfigurar = pendientes.length === accounts.length
+  const sinConfigurar = pendientes.length === propias.length
 
   /*
    * Contra el mes anterior comparamos el GASTO, no el saldo: «En cuentas» es
@@ -124,7 +133,7 @@ export function Dashboard() {
                 Falta configurar tus saldos
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Anotá cuánto tenés hoy en {accounts.map((a) => a.name).join(' y ')} y el total
+                Anotá cuánto tenés hoy en {propias.map((a) => a.name).join(' y ')} y el total
                 aparece acá. Kumi ya guarda tus movimientos: lo que falta es el punto de partida.
               </p>
             </div>
@@ -155,7 +164,7 @@ export function Dashboard() {
             </span>
 
             <span className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              {accounts.map((a) => (
+              {propias.map((a) => (
                 <Saldo key={a.id} account={a} />
               ))}
             </span>
@@ -168,6 +177,22 @@ export function Dashboard() {
               <span className="mt-2 block text-xs text-muted-foreground">
                 No incluye {pendientes.map((a) => a.name).join(' y ')} —{' '}
                 {pendientes.length === 1 ? 'falta configurar su saldo' : 'faltan sus saldos'}.
+              </span>
+            )}
+
+            {/*
+              La deuda se muestra al lado, nunca restada: «En cuentas» es lo que
+              tenés. Descontarla acá sería estrenar el Disponible a medias, sin
+              los compromisos del ciclo que le faltan (ADR 0004, D8).
+            */}
+            {deuda.reliable && deuda.totalCents !== 0 && (
+              <span className="mt-2 flex items-center gap-1.5 text-xs">
+                <CreditCard size={13} className="shrink-0 text-muted-foreground" />
+                <span className="text-muted-foreground">Debes</span>
+                <span className="font-medium tabular-nums text-rose-600">
+                  {formatMoney(deuda.totalCents)}
+                </span>
+                <span className="text-muted-foreground/70">· sin descontar</span>
               </span>
             )}
           </button>
@@ -323,6 +348,8 @@ export function Dashboard() {
  */
 function Saldo({ account }: { account: Account }) {
   const Icon = account.kind === 'bank' ? Landmark : Banknote
+  // `Saldo` solo se usa con cuentas del usuario: la deuda de una tarjeta no
+  // pertenece al desglose de «En cuentas» y tiene su propia línea.
   return (
     <span className="flex items-center gap-1.5 text-xs">
       <Icon size={13} className="shrink-0 text-muted-foreground" />
