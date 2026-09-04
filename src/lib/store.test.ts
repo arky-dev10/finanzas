@@ -10,7 +10,9 @@ import {
   addTransaction,
   addWallet,
   budgetStatus,
+  confirmStatement,
   creditAvailableCents,
+  creditCardStatus,
   currentMonthKey,
   deleteAccount,
   deleteCard,
@@ -732,5 +734,159 @@ describe('transferencias', () => {
       date: '2026-09-20',
     })
     expect(lastUsedAccountId()).toBe('a_bcp')
+  })
+})
+
+/* ---------- estado de cuenta de la tarjeta (ADR 0004, D4 y D5) ---------- */
+
+describe('estado de cuenta', () => {
+  const HOY = '2026-09-10' // el cierre del 5 ya pasó; vence el 22
+
+  /**
+   * Visa que cierra el 5 y vence el 22, con S/ 1,250 facturados (compras del
+   * período cerrado) y S/ 300 consumidos después del cierre.
+   */
+  function sembrarVisa() {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    addAdjustment('a_bcp', 240000, '2026-08-01')
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 5, dueDay: 22 })
+    addAdjustment(visa.accountId, 0, '2026-08-01')
+    addTransaction({
+      amountCents: 125000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-01',
+    })
+    addTransaction({
+      amountCents: 30000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-08',
+    })
+    return visa
+  }
+
+  it('parte la deuda en lo facturado y lo que va en curso', () => {
+    const visa = sembrarVisa()
+    const st = creditCardStatus(visa.accountId, HOY)!
+
+    expect(st.billedCents).toBe(125000)
+    expect(st.runningCents).toBe(30000)
+    expect(st.debtCents).toBe(155000)
+    // Las dos mitades reparten la deuda entera, sin solaparse ni dejar hueco.
+    expect(st.billedCents + st.runningCents).toBe(st.debtCents)
+    expect(st.cycle.dueDate).toBe('2026-09-22')
+  })
+
+  it('pagar baja lo facturado y no toca el consumo en curso', () => {
+    const visa = sembrarVisa()
+    addTransaction({
+      amountCents: 125000,
+      nature: 'transfer',
+      accountId: 'a_bcp',
+      toAccountId: visa.accountId,
+      date: '2026-09-20',
+    })
+    const st = creditCardStatus(visa.accountId, HOY)!
+
+    expect(st.billedCents).toBe(0)
+    expect(st.runningCents).toBe(30000)
+    expect(st.debtCents).toBe(30000)
+  })
+
+  it('pagar de más no deja «por pagar» en negativo', () => {
+    const visa = sembrarVisa()
+    addTransaction({
+      amountCents: 200000,
+      nature: 'transfer',
+      accountId: 'a_bcp',
+      toAccountId: visa.accountId,
+      date: '2026-09-20',
+    })
+    const st = creditCardStatus(visa.accountId, HOY)!
+    expect(st.billedCents).toBe(0)
+    // 155,000 de deuda menos 200,000 pagados: quedaste 45,000 a favor.
+    expect(st.debtCents).toBe(-45000)
+  })
+
+  it('la calibración inicial no se cuenta como consumo del período abierto', () => {
+    // Regresión: fechada dentro del período abierto, la calibración inflaba el
+    // «en curso» por encima de la deuda entera. El en curso es el resto.
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 5, dueDay: 22 })
+    addAdjustment(visa.accountId, -95000, '2026-09-01')
+
+    const st = creditCardStatus(visa.accountId, '2026-09-04')!
+    expect(st.debtCents).toBe(95000)
+    expect(st.billedCents).toBe(0)
+    expect(st.runningCents).toBe(95000)
+    expect(st.billedCents + st.runningCents).toBe(st.debtCents)
+  })
+
+  it('una compra del día del cierre entra a ESA facturación', () => {
+    const visa = sembrarVisa()
+    addTransaction({
+      amountCents: 5000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-05',
+    })
+    const st = creditCardStatus(visa.accountId, HOY)!
+    expect(st.billedCents).toBe(130000)
+    expect(st.runningCents).toBe(30000)
+  })
+
+  it('sin ciclo cargado no inventa un «por pagar»', () => {
+    sembrar({ transactions: [] })
+    const sinCiclo = addCreditCard({ name: 'Amex' })
+    expect(creditCardStatus(sinCiclo.accountId, HOY)).toBeNull()
+    // Y una cuenta que no es tarjeta tampoco tiene estado de cuenta.
+    expect(creditCardStatus('a_bcp', HOY)).toBeNull()
+  })
+
+  it('arranca sin confirmar: lo que muestra es la estimación de Kumi', () => {
+    const visa = sembrarVisa()
+    expect(creditCardStatus(visa.accountId, HOY)!.confirmed).toBe(false)
+  })
+
+  it('al confirmar, el monto pasa a ser el del banco y la diferencia son sus cargos', () => {
+    const visa = sembrarVisa()
+    // El papel dice 1,283.50: hay 33.50 de membresía e ITF que Kumi no sabía.
+    confirmStatement(visa.accountId, 128350, HOY)
+    const st = creditCardStatus(visa.accountId, HOY)!
+
+    expect(st.billedCents).toBe(128350)
+    expect(st.confirmed).toBe(true)
+    // Los cargos son deuda de verdad: suben el total, no solo el facturado.
+    expect(st.debtCents).toBe(158350)
+    expect(st.runningCents).toBe(30000)
+  })
+
+  it('los cargos del banco se fechan en el cierre, no hoy: no son consumo en curso', () => {
+    const visa = sembrarVisa()
+    confirmStatement(visa.accountId, 128350, HOY)
+    const ajuste = getData().transactions.find(
+      (t) => t.nature === 'adjustment' && t.accountId === visa.accountId && t.date === '2026-09-05',
+    )
+    expect(ajuste?.amountCents).toBe(-3350)
+  })
+
+  it('confirmar un monto que ya coincidía no ensucia el historial', () => {
+    const visa = sembrarVisa()
+    const antes = getData().transactions.length
+    confirmStatement(visa.accountId, 125000, HOY)
+
+    expect(getData().transactions).toHaveLength(antes)
+    expect(creditCardStatus(visa.accountId, HOY)!.confirmed).toBe(true)
+  })
+
+  it('la confirmación caduca al cerrar el período siguiente', () => {
+    const visa = sembrarVisa()
+    confirmStatement(visa.accountId, 128350, HOY)
+    // Un mes después ya cerró otro período: ese todavía no lo confirmó nadie.
+    expect(creditCardStatus(visa.accountId, '2026-10-10')!.confirmed).toBe(false)
   })
 })

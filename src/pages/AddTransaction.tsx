@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowLeftRight, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -48,21 +48,42 @@ const MEDIA: { id: Medium; label: string }[] = [
 export function AddTransaction() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [params] = useSearchParams()
   const { accounts, categories } = useData()
   const existing = id ? getTransaction(id) : undefined
   const isEdit = Boolean(id)
 
+  /*
+   * «Pagar» desde una tarjeta llega acá con el destino y el monto puestos, pero
+   * como un formulario normal y no como un atajo que registra solo: pagar es
+   * mover plata de verdad, y el monto casi nunca es exactamente el sugerido
+   * (pago parcial, o el estado de cuenta que llegó distinto).
+   */
+  const pagando = accounts.find((a) => a.id === params.get('pagar') && a.kind === 'credit')
+  const montoSugerido = Number(params.get('monto'))
+
   const initialNature: Nature =
     existing && existing.nature !== 'adjustment' ? existing.nature : 'expense'
-  const [nature, setNature] = useState<Nature>(initialNature)
+  const [nature, setNature] = useState<Nature>(pagando ? 'transfer' : initialNature)
   const esTransferencia = nature === 'transfer'
-  const [amount, setAmount] = useState(existing ? centsToInput(existing.amountCents) : '')
+  const [amount, setAmount] = useState(
+    existing
+      ? centsToInput(existing.amountCents)
+      : pagando && Number.isInteger(montoSugerido) && montoSugerido > 0
+        ? centsToInput(montoSugerido)
+        : '',
+  )
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
   const [date, setDate] = useState(existing?.date ?? todayISO())
   const [note, setNote] = useState(existing?.note ?? '')
   // Cuenta: la del movimiento en edición, o la última usada (D1 del ADR 0001).
   const [accountId, setAccountId] = useState(
-    existing?.accountId ?? lastUsedAccountId() ?? accounts[0]?.id ?? DEFAULT_ACCOUNT_ID,
+    existing?.accountId ??
+      // Pagando una tarjeta, el origen tiene que ser una cuenta con plata: la
+      // última usada puede ser la tarjeta misma, y pagarse a sí misma no es nada.
+      (pagando ? origenParaPagar(accounts, pagando.id) : lastUsedAccountId()) ??
+      accounts[0]?.id ??
+      DEFAULT_ACCOUNT_ID,
   )
   const account = accounts.find((a) => a.id === accountId) ?? accounts[0]
   // Medio: el de la cuenta en edición, el último de la cuenta, o Yape por
@@ -71,7 +92,9 @@ export function AddTransaction() {
     existing?.medium ?? defaultMedium(account),
   )
   const [cardId, setCardId] = useState<string | undefined>(existing?.cardId)
-  const [toAccountId, setToAccountId] = useState<string | undefined>(existing?.toAccountId)
+  const [toAccountId, setToAccountId] = useState<string | undefined>(
+    existing?.toAccountId ?? pagando?.id,
+  )
 
   // Las tarjetas que abren la cuenta elegida. En una de crédito es una sola —
   // la suya— y no hay nada que elegir; en un banco pueden ser varias.
@@ -392,4 +415,16 @@ export function AddTransaction() {
 function defaultMedium(account: Account | undefined): Medium | undefined {
   if (account?.kind === 'bank') return 'yape'
   return account?.kind === 'credit' ? 'card' : undefined
+}
+
+/**
+ * De qué cuenta se paga una tarjeta. La última usada sirve solo si es una
+ * cuenta con plata: si fue la tarjeta misma, pagarse a sí misma no es nada.
+ */
+function origenParaPagar(accounts: Account[], cardAccountId: string): string | undefined {
+  const ultima = lastUsedAccountId()
+  const sirve = (id: string | undefined) =>
+    id !== undefined && id !== cardAccountId && accounts.find((a) => a.id === id)?.kind !== 'credit'
+  if (sirve(ultima)) return ultima
+  return accounts.find((a) => a.kind === 'bank')?.id ?? accounts.find((a) => a.kind === 'cash')?.id
 }

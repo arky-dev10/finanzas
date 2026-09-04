@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { monthKeyFor, shiftMonth, todayISO } from '@/lib/format'
+import { cardCycle, type CardCycle } from '@/lib/cards'
 import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
 import type {
   Account,
@@ -307,6 +308,106 @@ export function totalDebtCents(): { totalCents: number; reliable: boolean } {
     else totalCents += accountDebtCents(a.id)
   }
   return { totalCents, reliable }
+}
+
+/**
+ * El estado de una tarjeta de crédito en su ciclo: cuánto hay que pagar, para
+ * cuándo, y cuánto se lleva consumido del período que todavía no cierra.
+ *
+ * Los dos montos parten la deuda total sin solaparse ni dejar hueco:
+ *   deuda = facturado + en curso
+ * y eso vale SIEMPRE, porque el en curso se calcula como el resto. Definirlo
+ * sumando los consumos posteriores al cierre daba lo mismo en el caso normal
+ * pero mentía en los bordes: la calibración inicial de la tarjeta, fechada
+ * dentro del período abierto, se contaba como consumo y el «en curso» salía
+ * más grande que la deuda entera.
+ *
+ * Devuelve `null` si la tarjeta no tiene ciclo cargado: sin cierre ni
+ * vencimiento no hay «por pagar» que calcular, y no se inventa uno.
+ */
+export interface CardStatus {
+  cycle: CardCycle
+  /** Lo facturado que sigue pendiente: la deuda al cierre menos lo abonado después. */
+  billedCents: number
+  /** Consumo del período abierto, que se factura en el próximo cierre. */
+  runningCents: number
+  debtCents: number
+  /** Si el usuario ya confirmó este estado de cuenta contra el papel del banco. */
+  confirmed: boolean
+}
+
+/** La deuda de la tarjeta contando solo lo que ocurrió hasta `date`, inclusive. */
+function debtAsOf(accountId: string, date: string): number {
+  let total = 0
+  for (const t of data.transactions) {
+    if (t.date <= date) total += signedCentsFor(t, accountId)
+  }
+  return -total
+}
+
+export function creditCardStatus(accountId: string, today: string = todayISO()): CardStatus | null {
+  const account = getAccount(accountId)
+  if (account?.kind !== 'credit') return null
+  if (account.closingDay === undefined || account.dueDay === undefined) return null
+
+  const cycle = cardCycle(account.closingDay, account.dueDay, today)
+
+  // Lo que ENTRA después del cierre paga lo ya facturado. Lo que sale no se
+  // suma acá: el consumo en curso sale por diferencia, más abajo.
+  let abonado = 0
+  for (const t of data.transactions) {
+    if (t.date <= cycle.closedTo) continue
+    const efecto = signedCentsFor(t, accountId)
+    if (efecto > 0) abonado += efecto
+  }
+
+  // Deber menos que nada no es una deuda, es saldo a favor: por eso el recorte.
+  const billedCents = Math.max(0, debtAsOf(accountId, cycle.closedTo) - abonado)
+  const debtCents = accountDebtCents(accountId)
+  return {
+    cycle,
+    billedCents,
+    runningCents: debtCents - billedCents,
+    debtCents,
+    confirmed: account.statementConfirmedOn === cycle.closedTo,
+  }
+}
+
+/**
+ * El usuario declara lo que dice el estado de cuenta y Kumi anota la diferencia
+ * como cargos del banco: membresía, ITF, seguro de desgravamen, intereses (ADR
+ * 0004, D5). Es el mismo gesto —y el mismo principio— que `addAdjustment`: la
+ * realidad la declara el usuario y la app anota el delta, sin inventar un gasto.
+ *
+ * El ajuste va fechado EN EL CIERRE, no hoy: esos cargos pertenecen al período
+ * facturado, y fecharlos hoy los metería en el consumo en curso, que es
+ * justamente lo que todavía no está facturado.
+ */
+export function confirmStatement(
+  accountId: string,
+  amountCents: number,
+  today: string = todayISO(),
+): boolean {
+  const status = creditCardStatus(accountId, today)
+  if (status === null) return false
+
+  const delta = amountCents - debtAsOf(accountId, status.cycle.closedTo)
+  const ajuste: Transaction = {
+    id: crypto.randomUUID(),
+    // El saldo de una cuenta de crédito es negativo: más deuda es menos saldo.
+    amountCents: -delta,
+    nature: 'adjustment',
+    accountId,
+    date: status.cycle.closedTo,
+  }
+  commit({
+    ...data,
+    accounts: data.accounts.map((a) =>
+      a.id === accountId ? { ...a, statementConfirmedOn: status.cycle.closedTo } : a,
+    ),
+    transactions: delta === 0 ? data.transactions : [ajuste, ...data.transactions],
+  })
+  return true
 }
 
 /**

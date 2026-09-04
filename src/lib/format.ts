@@ -93,7 +93,7 @@ export function monthKeyFor(dateISO: string, startDay: number): string {
 }
 
 /** Días del mes calendario (`m` 1–12). A mano para no pasar por Date. */
-function daysInMonth(y: number, m: number): number {
+export function daysInMonth(y: number, m: number): number {
   if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28
   return m === 4 || m === 6 || m === 9 || m === 11 ? 30 : 31
 }

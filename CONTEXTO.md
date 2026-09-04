@@ -151,6 +151,7 @@ interface Account {
   creditLimitCents?: number  // solo credit: la línea aprobada
   closingDay?: number     // solo credit: día de cierre  (1–31, no 1–28)
   dueDay?: number         // solo credit: día de pago    (1–31, no 1–28)
+  statementConfirmedOn?: string  // cierre del último estado de cuenta confirmado
 }
 
 // Llave para llegar a una cuenta, NO un lugar donde vive la plata.
@@ -439,17 +440,17 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
 - [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
       con tarjeta de crédito cuenta el día de la compra, con su categoría
+- [x] Ciclo de facturación por tarjeta (`src/lib/cards.ts`): «por pagar y
+      cuándo» como número protagonista, consumo en curso aparte, conciliación
+      contra el estado de cuenta real y flujo Pagar prellenado
 - [x] Transferencias entre cuentas propias (`nature: 'transfer'`, el F1c que el
       ADR 0001 dejó debiendo): pagar la tarjeta, retirar del cajero, pasar de un
       banco a otro. No son gasto ni ingreso y no tocan el presupuesto
 
 ### Pendiente / ideas
 
-Los bloques 3 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
+Los bloques 4 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
 
-- **Tarjeta viva**: facturado vs. consumo en curso a partir de `closingDay`
-  (recortando el día al último del mes), «por pagar y cuándo», conciliación
-  contra el estado de cuenta real y flujo Pagar.
 - **Cuotas**: plan en el movimiento, peso por ciclo en el presupuesto, «vas 3 de 12».
 - **Calendario y recordatorios** (ADR 0003 + su enmienda).
 - **Disponible**: el número nuevo del Resumen.

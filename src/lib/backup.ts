@@ -108,6 +108,8 @@ const CARD_KINDS: readonly string[] = ['debit', 'credit'] satisfies CardKind[]
 const BRANDS: readonly string[] = ['visa', 'mastercard', 'amex', 'diners'] satisfies CardBrand[]
 const PROVIDERS: readonly string[] = ['yape', 'plin'] satisfies WalletProvider[]
 
+const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+
 /** Día del mes tal como lo fija el banco: 1–31, sin acotar a 28 (ver `types.ts`). */
 const isDayOfMonth = (v: unknown): boolean =>
   typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31
@@ -124,7 +126,8 @@ function isAccount(v: unknown): v is Account {
   if (a.creditLimitCents !== undefined && !(Number.isInteger(a.creditLimitCents) && (a.creditLimitCents as number) >= 0))
     return false
   if (a.closingDay !== undefined && !isDayOfMonth(a.closingDay)) return false
-  return a.dueDay === undefined || isDayOfMonth(a.dueDay)
+  if (a.dueDay !== undefined && !isDayOfMonth(a.dueDay)) return false
+  return a.statementConfirmedOn === undefined || isDate(a.statementConfirmedOn)
 }
 
 function isCard(v: unknown): v is Card {
@@ -189,8 +192,6 @@ function toCategory(raw: Record<string, unknown>, legacy: boolean): Category {
   if (isAmount(budget)) cat.budgetCents = legacy ? Math.round(budget * 100) : budget
   return cat
 }
-
-const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 
 function isTransaction(v: unknown): v is Transaction {
   if (typeof v !== 'object' || v === null) return false

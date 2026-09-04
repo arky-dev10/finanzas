@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  CalendarClock,
   CircleAlert,
   CreditCard,
   Landmark,
@@ -15,14 +16,25 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { brandLabel } from '@/lib/issuers'
-import { centsToInput, formatMoney, parseAmountToCents, sanitizeAmount } from '@/lib/format'
+import {
+  centsToInput,
+  formatDate,
+  formatMoney,
+  parseAmountToCents,
+  sanitizeAmount,
+  todayISO,
+} from '@/lib/format'
+import { dueLabel } from '@/lib/cards'
 import {
   accountBalanceCents,
   accountDebtCents,
   addAdjustment,
   addWallet,
   cardsForAccount,
+  confirmStatement,
   creditAvailableCents,
+  creditCardStatus,
+  type CardStatus,
   deleteWallet,
   getAccount,
   totalDebtCents,
@@ -228,6 +240,15 @@ function AccountRow({ account, cards }: { account: Account; cards: Card[] }) {
   )
 }
 
+/**
+ * La tarjeta de crédito con su ciclo. El número protagonista es «por pagar»
+ * —lo que el banco va a cobrar y cuándo—, no la deuda total: es lo único
+ * accionable (ADR 0004, D4). La deuda entera y el consumo en curso quedan
+ * abajo, en segundo plano.
+ *
+ * Sin ciclo cargado no hay «por pagar» que calcular y manda la deuda total,
+ * que es lo único que se sabe.
+ */
 function CreditRow({ card }: { card: Card }) {
   const navigate = useNavigate()
   const account = getAccount(card.accountId)
@@ -236,15 +257,19 @@ function CreditRow({ card }: { card: Card }) {
   const debt = accountDebtCents(card.accountId)
   const libre = creditAvailableCents(card.accountId)
   const tag = cardTag(card)
-  const ciclo =
-    account.closingDay === undefined && account.dueDay === undefined
-      ? undefined
-      : [
-          account.closingDay === undefined ? undefined : `Cierra el ${account.closingDay}`,
-          account.dueDay === undefined ? undefined : `vence el ${account.dueDay}`,
-        ]
-          .filter(Boolean)
-          .join(' · ')
+  const status = account.balancePending ? null : creditCardStatus(card.accountId)
+  const hoy = todayISO()
+
+  const principal = status === null ? debt : status.billedCents
+  const etiqueta = account.balancePending
+    ? 'sin calibrar'
+    : status === null
+      ? 'debes'
+      : status.confirmed
+        ? 'por pagar'
+        : '≈ por pagar'
+
+  const vencido = status !== null && status.cycle.dueDate < hoy && status.billedCents > 0
 
   return (
     <div className="flex flex-col p-4">
@@ -260,34 +285,71 @@ function CreditRow({ card }: { card: Card }) {
         </div>
         <div className="flex shrink-0 flex-col items-end">
           <span className="text-lg font-semibold tabular-nums text-rose-600">
-            {account.balancePending ? '—' : formatMoney(debt)}
+            {account.balancePending ? '—' : formatMoney(principal)}
           </span>
-          <span className="text-[10px] text-muted-foreground">
-            {account.balancePending ? 'sin calibrar' : 'debes'}
-          </span>
+          <span className="text-[10px] text-muted-foreground">{etiqueta}</span>
         </div>
       </div>
 
-      {/* Línea y ciclo bajan a su propia línea: arriba compiten con el monto y
-          en 390px lo empujan a dos renglones. */}
-      {(ciclo !== undefined || account.creditLimitCents !== undefined) && (
-        <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
-          {account.creditLimitCents !== undefined && (
-            <span>
-              Línea {formatMoney(account.creditLimitCents)}
-              {/* El "libre" es una resta contra la deuda: sin calibrar no existe.
-                  La línea sí — es un dato que el usuario cargó y no se esconde. */}
-              {libre === null || account.balancePending ? null : (
-                <>
-                  {' · libre '}
-                  {formatMoney(libre)}
-                  <span className="text-muted-foreground/70"> (del banco, no tuya)</span>
-                </>
-              )}
-            </span>
-          )}
-          {ciclo !== undefined && <span>{ciclo}</span>}
-        </div>
+      {status !== null && status.billedCents > 0 && (
+        <p
+          className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${
+            vencido ? 'text-rose-600' : 'text-muted-foreground'
+          }`}
+        >
+          <CalendarClock size={14} />
+          {dueLabel(status.cycle.dueDate, hoy)} · {formatDate(status.cycle.dueDate)}
+        </p>
+      )}
+
+      {status !== null && !status.confirmed && (
+        <ConfirmStatement account={account} status={status} />
+      )}
+
+      {/* Lo de abajo es contexto, no la decisión del día: va en un cuerpo más
+          chico para que no compita con el «por pagar». */}
+      <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+        {status !== null && status.runningCents > 0 && (
+          <span>
+            En curso {formatMoney(status.runningCents)} · se factura el{' '}
+            {formatDate(status.cycle.openTo)}
+          </span>
+        )}
+        {status !== null && !account.balancePending && <span>Deuda total {formatMoney(debt)}</span>}
+        {account.creditLimitCents !== undefined && (
+          <span>
+            Línea {formatMoney(account.creditLimitCents)}
+            {/* El "libre" es una resta contra la deuda: sin calibrar no existe.
+                La línea sí — es un dato que el usuario cargó y no se esconde. */}
+            {libre === null || account.balancePending ? null : (
+              <>
+                {' · libre '}
+                {formatMoney(libre)}
+                <span className="text-muted-foreground/70"> (del banco, no tuya)</span>
+              </>
+            )}
+          </span>
+        )}
+        {status === null && (account.closingDay !== undefined || account.dueDay !== undefined) && (
+          <span>
+            {[
+              account.closingDay === undefined ? undefined : `Cierra el ${account.closingDay}`,
+              account.dueDay === undefined ? undefined : `vence el ${account.dueDay}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        )}
+      </div>
+
+      {status !== null && status.billedCents > 0 && (
+        <Button
+          size="sm"
+          onClick={() => navigate(`/registrar?pagar=${account.id}&monto=${status.billedCents}`)}
+          className="mt-3 h-9 self-start"
+        >
+          Pagar {formatMoney(status.billedCents)}
+        </Button>
       )}
 
       <AdjustRow
@@ -296,6 +358,78 @@ function CreditRow({ card }: { card: Card }) {
         deuda
         onEdit={() => navigate(`/tarjetas/${card.id}`)}
       />
+    </div>
+  )
+}
+
+/**
+ * Kumi estima y el usuario confirma (ADR 0004, D5). Va como un enlace discreto
+ * y no como un aviso permanente: el estado de cuenta tarda en llegar, y una
+ * alerta que aparece sola cada mes y no se puede resolver todavía se vuelve
+ * ruido que se aprende a ignorar.
+ */
+function ConfirmStatement({ account, status }: { account: Account; status: CardStatus }) {
+  const [open, setOpen] = useState(false)
+  const [monto, setMonto] = useState('')
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => {
+          setMonto(centsToInput(status.billedCents))
+          setOpen(true)
+        }}
+        className="mt-1 self-start text-xs font-medium"
+        style={{ color: LINK }}
+      >
+        Confirmar con tu estado de cuenta
+      </button>
+    )
+  }
+
+  function guardar() {
+    const cents = parseAmountToCents(monto)
+    if (cents === null || cents < 0) {
+      toast.error('Ingresa el monto del estado de cuenta')
+      return
+    }
+    const diferencia = cents - status.billedCents
+    confirmStatement(account.id, cents)
+    toast.success(
+      diferencia === 0
+        ? 'Estado de cuenta confirmado'
+        : `Confirmado · ${formatMoney(Math.abs(diferencia))} de cargos del banco`,
+    )
+    setOpen(false)
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
+      <label htmlFor={`estado-${account.id}`} className="text-xs text-muted-foreground">
+        ¿Cuánto dice tu estado de cuenta del {formatDate(status.cycle.closedTo)}?
+      </label>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">S/</span>
+        <Input
+          id={`estado-${account.id}`}
+          inputMode="decimal"
+          placeholder="0.00"
+          value={monto}
+          onChange={(e) => setMonto(sanitizeAmount(e.target.value))}
+        />
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Manda el papel del banco. La diferencia con lo que calculó Kumi se anota como
+        cargos suyos —membresía, ITF, desgravamen, intereses— fechados en el cierre.
+      </p>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={guardar} className="h-9 flex-1">
+          Confirmar
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)} className="h-9">
+          Cancelar
+        </Button>
+      </div>
     </div>
   )
 }

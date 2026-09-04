@@ -44,6 +44,13 @@ export interface Account {
   closingDay?: number
   /** Solo en `credit`: día del mes en que vence el pago (1–31, como `closingDay`). */
   dueDay?: number
+  /**
+   * Solo en `credit`: el cierre (ISO) del último estado de cuenta que el
+   * usuario confirmó contra el papel del banco. Mientras no coincida con el
+   * cierre actual, lo que muestra la app es su estimación y lo dice
+   * (ADR 0004, D5).
+   */
+  statementConfirmedOn?: string
 }
 
 export type CardKind = 'debit' | 'credit'
