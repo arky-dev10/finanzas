@@ -5,6 +5,9 @@ import type {
   CardKind,
   Category,
   Medium,
+  Recurrence,
+  Reminder,
+  ReminderKind,
   Transaction,
   TxNature,
   Wallet,
@@ -47,6 +50,7 @@ export interface Backup {
   accounts: Account[]
   cards: Card[]
   wallets: Wallet[]
+  reminders: Reminder[]
   categories: Category[]
   transactions: Transaction[]
 }
@@ -57,6 +61,8 @@ export interface Data {
   cards: Card[]
   /** Yape/Plin con su cuenta de origen declarada. */
   wallets: Wallet[]
+  /** Pagos e ingresos esperados (ADR 0003). Nunca mueven plata por su cuenta. */
+  reminders: Reminder[]
   categories: Category[]
   transactions: Transaction[]
   /** Tope de gasto de todo el mes, en céntimos. 0 = sin tope. */
@@ -107,6 +113,8 @@ const KINDS: readonly string[] = ['bank', 'cash', 'credit'] satisfies Account['k
 const CARD_KINDS: readonly string[] = ['debit', 'credit'] satisfies CardKind[]
 const BRANDS: readonly string[] = ['visa', 'mastercard', 'amex', 'diners'] satisfies CardBrand[]
 const PROVIDERS: readonly string[] = ['yape', 'plin'] satisfies WalletProvider[]
+const REMINDER_KINDS: readonly string[] = ['expense', 'income'] satisfies ReminderKind[]
+const RECURRENCES: readonly string[] = ['once', 'monthly'] satisfies Recurrence[]
 
 const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 
@@ -141,6 +149,24 @@ function isCard(v: unknown): v is Card {
     (c.brand === undefined || BRANDS.includes(c.brand as string)) &&
     (c.last4 === undefined || (typeof c.last4 === 'string' && /^\d{4}$/.test(c.last4)))
   )
+}
+
+/**
+ * Un recordatorio sin cuándo no es un recordatorio: el mensual necesita su día
+ * y el de una vez su fecha. Sin eso no habría dónde ponerlo en el calendario.
+ */
+function isReminder(v: unknown): v is Reminder {
+  if (typeof v !== 'object' || v === null) return false
+  const r = v as Record<string, unknown>
+  if (typeof r.id !== 'string' || typeof r.name !== 'string') return false
+  if (!REMINDER_KINDS.includes(r.kind as string)) return false
+  if (!RECURRENCES.includes(r.recurrence as string)) return false
+  if (r.recurrence === 'monthly' ? !isDayOfMonth(r.day) : !isDate(r.date)) return false
+  if (r.amountCents !== undefined && !(Number.isInteger(r.amountCents) && (r.amountCents as number) > 0))
+    return false
+  if (r.categoryId !== undefined && typeof r.categoryId !== 'string') return false
+  if (!isDate(r.createdOn)) return false
+  return Array.isArray(r.paidOn) && r.paidOn.every(isDate)
 }
 
 function isWallet(v: unknown): v is Wallet {
@@ -411,10 +437,22 @@ export function parseData(raw: unknown): Data | null {
     Array.isArray(o.wallets) ? o.wallets : [],
   )
 
+  /*
+   * Aditivo y sin subir la versión, como `monthStartDay` (ADR 0003): un
+   * respaldo viejo se lee como "todavía no cargaste recordatorios", que es la
+   * verdad, y una app vieja que reciba uno nuevo simplemente los ignora.
+   *
+   * Se filtran los rotos en vez de rechazar el respaldo entero: un
+   * recordatorio es una expectativa, no plata, y perder el historial por uno
+   * mal formado sería desproporcionado.
+   */
+  const reminders = Array.isArray(o.reminders) ? (o.reminders.filter(isReminder) as Reminder[]) : []
+
   return {
     accounts,
     cards,
     wallets,
+    reminders,
     categories,
     transactions: normalizeTransactions(transactions, accounts, cards),
     // Los respaldos v1 no lo traían: quedan sin tope hasta que se defina uno.
@@ -437,6 +475,7 @@ export function toBackup(data: Data): Backup {
     accounts: data.accounts,
     cards: data.cards,
     wallets: data.wallets,
+    reminders: data.reminders,
     categories: data.categories,
     transactions: data.transactions,
   }

@@ -8,6 +8,7 @@ export function hidesNav(pathname: string): boolean {
   return (
     pathname.startsWith('/registrar') ||
     pathname.startsWith('/tarjetas') ||
+    pathname.startsWith('/recordatorios') ||
     /^\/cuentas\/.+/.test(pathname)
   )
 }

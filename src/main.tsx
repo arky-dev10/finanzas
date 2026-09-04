@@ -8,6 +8,8 @@ import { Toaster } from '@/components/ui/sonner'
 import { Accounts } from '@/pages/Accounts'
 import { AccountForm } from '@/pages/AccountForm'
 import { CardForm } from '@/pages/CardForm'
+import { Calendar } from '@/pages/Calendar'
+import { ReminderForm } from '@/pages/ReminderForm'
 import { Dashboard } from '@/pages/Dashboard'
 import { AddTransaction } from '@/pages/AddTransaction'
 import { Categories } from '@/pages/Categories'
@@ -33,6 +35,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/cuentas/:id" element={<AccountForm />} />
           <Route path="/tarjetas/nueva" element={<CardForm />} />
           <Route path="/tarjetas/:id" element={<CardForm />} />
+          <Route path="/calendario" element={<Calendar />} />
+          <Route path="/recordatorios/nuevo" element={<ReminderForm />} />
+          <Route path="/recordatorios/:id" element={<ReminderForm />} />
           <Route path="/historial" element={<History />} />
           <Route path="/ajustes" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

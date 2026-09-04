@@ -206,6 +206,7 @@ interface Data {
   accounts: Account[]
   cards: Card[]        // v5, aditivo
   wallets: Wallet[]    // v5, aditivo
+  reminders: Reminder[]  // pagos e ingresos esperados; aditivo, sin bump
   categories: Category[]
   transactions: Transaction[]
   monthlyBudgetCents: number  // tope de todo el mes; 0 = sin tope
@@ -423,7 +424,8 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 
 ## Estado actual
 
-- [x] 5 pantallas: Resumen, Registrar/Editar, Categorías, Historial, Ajustes
+- [x] Pantallas: Resumen, Registrar/Editar, Calendario, Historial, Ajustes,
+      Categorías, Cuentas y tarjetas (las últimas dos fuera de la barra)
 - [x] Gráficos SVG interactivos (dona + barras mensuales)
 - [x] Tope mensual global (S/ 3,500 por defecto): % y monto restante integrados en la
       tarjeta de balance del Resumen, editable desde Ajustes
@@ -441,6 +443,11 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
 - [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
       con tarjeta de crédito cuenta el día de la compra, con su categoría
+- [x] Calendario (ADR 0003 + su enmienda): la grilla del ciclo con el rastro de
+      lo gastado atrás y los compromisos adelante, recordatorios mensuales o de
+      una vez con monto opcional, vencidas que se arrastran, y el flujo «Pagar»
+      que registra el movimiento real y recién ahí marca la ocurrencia.
+      Calendario toma el tab de Categorías, que pasa a Ajustes
 - [x] Compras en cuotas: un solo movimiento con su plan, deuda entera desde el
       día uno y presupuesto que solo siente la cuota. La cuota reaparece en los
       ciclos siguientes como una fila propia («cuota 4 de 12»), para que el
@@ -454,9 +461,8 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 
 ### Pendiente / ideas
 
-Los bloques 5 y 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
+El bloque 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
 
-- **Calendario y recordatorios** (ADR 0003 + su enmienda).
 - **Disponible**: el número nuevo del Resumen.
 
 - **Tema oscuro**: los tokens `.dark` ya existen en `index.css`, falta el toggle.

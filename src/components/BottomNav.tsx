@@ -1,11 +1,19 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutGrid, List, Tags, Plus, Settings2 } from 'lucide-react'
+import { LayoutGrid, List, CalendarDays, Plus, Settings2 } from 'lucide-react'
 import { hidesNav } from '@/lib/routes'
 
+/*
+ * La tríada temporal del ADR 0003: Historial es el pasado, Resumen el presente,
+ * Calendario el futuro (y, desde su enmienda, también el rastro del pasado).
+ *
+ * Calendario toma el lugar de Categorías —elección explícita del usuario entre
+ * tres propuestas—, que pasa a vivir en Ajustes y en las filas de cada
+ * pantalla: su gestión queda a un tap del home por el hub del Resumen.
+ */
 const items = [
   { to: '/', label: 'Resumen', icon: LayoutGrid },
   { to: '/historial', label: 'Historial', icon: List },
-  { to: '/categorias', label: 'Categorías', icon: Tags },
+  { to: '/calendario', label: 'Calendario', icon: CalendarDays },
   { to: '/ajustes', label: 'Ajustes', icon: Settings2 },
 ]
 

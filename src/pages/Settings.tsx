@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  Copy, Download, Link2, Link2Off, RefreshCw, RotateCcw, Share, Share2, Smartphone,
-  TriangleAlert, Upload,
+  ChevronRight, Copy, CreditCard, Download, Link2, Link2Off, RefreshCw, RotateCcw, Share,
+  Share2, Smartphone, Tags, TriangleAlert, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -104,6 +105,17 @@ export function Settings() {
       <h1 className="px-1 text-lg font-semibold">Ajustes</h1>
 
       <InstalarApp />
+
+      {/*
+        Categorías dejó de ser tab cuando Calendario tomó su lugar (ADR 0003,
+        D1): vive acá y en las filas de cada pantalla. Sin este acceso quedaría
+        alcanzable solo tocando una categoría del Resumen, que no es un lugar
+        donde nadie la buscaría para CREAR una.
+      */}
+      <section className="surface flex flex-col divide-y divide-border p-1">
+        <Enlace to="/categorias" icon={Tags} label="Categorías" hint="Crear, editar y sus presupuestos" />
+        <Enlace to="/cuentas" icon={CreditCard} label="Cuentas y tarjetas" hint="Saldos, deuda y Yape" />
+      </section>
 
       {/* `key` para que el input se re-sincronice tras importar o empezar de cero. */}
       <PresupuestoMensual key={data.monthlyBudgetCents} actual={data.monthlyBudgetCents} />
@@ -577,5 +589,35 @@ function VincularDispositivos() {
         copia sigue en tu cuenta.
       </p>
     </section>
+  )
+}
+
+/** Acceso a una pantalla que ya no tiene tab propio. */
+function Enlace({
+  to,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  to: string
+  icon: typeof Tags
+  label: string
+  hint: string
+}) {
+  const navigate = useNavigate()
+  return (
+    <button
+      onClick={() => navigate(to)}
+      className="flex items-center gap-3 p-4 text-left active:bg-muted/50"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
+        <Icon size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
+    </button>
   )
 }

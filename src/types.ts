@@ -137,3 +137,41 @@ export interface Transaction {
   date: string
   note?: string
 }
+
+/** Qué se espera: que salga plata (un recibo) o que entre (el sueldo). */
+export type ReminderKind = 'expense' | 'income'
+
+export type Recurrence = 'once' | 'monthly'
+
+/**
+ * Un pago o ingreso ESPERADO (ADR 0003). Nunca mueve plata por su cuenta:
+ * marcarlo pagado no crea un movimiento — el flujo «Pagar» registra el
+ * movimiento real y recién ahí marca la ocurrencia.
+ *
+ * El monto es opcional a propósito: hay recibos que no se saben hasta que
+ * llegan, y listarlos sin monto es más honesto que inventarles uno.
+ */
+export interface Reminder {
+  id: string
+  name: string
+  kind: ReminderKind
+  recurrence: Recurrence
+  amountCents?: number
+  categoryId?: string
+  /** En `monthly`: el día del mes (1–31, se recorta al último que exista). */
+  day?: number
+  /** En `once`: la fecha exacta. */
+  date?: string
+  /**
+   * Desde cuándo existe. Sin esto, anotar «Luz, día 10» hacía aparecer de golpe
+   * un año de recibos vencidos que nadie debía: las ocurrencias se calculan
+   * hacia atrás, y sin una fecha de nacimiento no hay dónde frenar.
+   */
+  createdOn: string
+  /**
+   * Las ocurrencias ya saldadas, por su fecha. Se guarda lo pagado y no «la
+   * próxima»: una vencida se arrastra entre ciclos hasta pagarse, y con un
+   * puntero se perdería al pasar de mes.
+   */
+  paidOn: string[]
+}

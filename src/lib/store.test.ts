@@ -16,12 +16,17 @@ import {
   currentMonthKey,
   deleteAccount,
   deleteCard,
+  deleteReminder,
   expenseByCategory,
   getAccount,
   getCard,
   getData,
   lastUsedAccountId,
+  addReminder,
+  markOccurrencePaid,
   monthEntries,
+  occurrencesIn,
+  overdueOccurrences,
   monthTotals,
   monthlyBudgetStatus,
   replaceData,
@@ -61,6 +66,7 @@ function sembrar(patch: Partial<Parameters<typeof replaceData>[0]> = {}) {
     accounts: CUENTAS,
     cards: [],
     wallets: [],
+    reminders: [],
     categories: CATEGORIAS,
     transactions: MOVIMIENTOS,
     monthlyBudgetCents: 0,
@@ -1004,5 +1010,158 @@ describe('cuotas', () => {
     comprarEnCuotas(7) // 120000 / 7 = 17142.85…
     expect(monthEntries('2026-09')[0].centsInMonth).toBe(17142)
     expect(monthEntries('2027-03')[0].centsInMonth).toBe(120000 - 17142 * 6)
+  })
+})
+
+/* ---------- recordatorios y ocurrencias (ADR 0003) ---------- */
+
+describe('recordatorios', () => {
+  const HOY = '2026-09-10'
+
+  /** `createdOn` fijo: si dependiera del reloj real, los tests cambiarían de
+   *  resultado según el día en que se corren. */
+  const DESDE = '2026-01-01'
+
+  function sembrarRecibos() {
+    sembrar({ transactions: [] })
+    addReminder({ name: 'Luz', kind: 'expense', recurrence: 'monthly', day: 15, amountCents: 12000, createdOn: DESDE })
+    addReminder({ name: 'Alquiler', kind: 'expense', recurrence: 'monthly', day: 1, amountCents: 90000, createdOn: DESDE })
+    addReminder({ name: 'Sueldo', kind: 'income', recurrence: 'monthly', day: 28, amountCents: 320000, createdOn: DESDE })
+  }
+
+  it('lista lo que toca en el ciclo, ordenado por fecha', () => {
+    sembrarRecibos()
+    expect(occurrencesIn('2026-09', HOY).map((o) => [o.reminder.name, o.date])).toEqual([
+      ['Alquiler', '2026-09-01'],
+      ['Luz', '2026-09-15'],
+      ['Sueldo', '2026-09-28'],
+    ])
+  })
+
+  it('lo que ya pasó sin pagarse queda vencido; lo que viene, no', () => {
+    sembrarRecibos()
+    const [alquiler, luz] = occurrencesIn('2026-09', HOY)
+    expect(alquiler.overdue).toBe(true) // 1 de septiembre, ya pasó
+    expect(luz.overdue).toBe(false) // 15, todavía no
+  })
+
+  it('marcar pagado no mueve un centavo: eso lo hace el movimiento real', () => {
+    sembrarRecibos()
+    const antes = totalInAccounts().totalCents
+    const luz = getData().reminders.find((r) => r.name === 'Luz')!
+
+    markOccurrencePaid(luz.id, '2026-09-15')
+
+    expect(totalInAccounts().totalCents).toBe(antes)
+    expect(getData().transactions).toHaveLength(0)
+    expect(occurrencesIn('2026-09', HOY).find((o) => o.date === '2026-09-15')?.paid).toBe(true)
+  })
+
+  it('una vencida se arrastra: no desaparece al cambiar de ciclo', () => {
+    sembrar({ transactions: [] })
+    addReminder({ name: 'Internet', kind: 'expense', recurrence: 'monthly', day: 20, amountCents: 8900, createdOn: DESDE })
+    // Estamos en septiembre; la de agosto quedó sin pagar.
+    const vencidas = overdueOccurrences(HOY)
+    expect(vencidas.some((o) => o.date === '2026-08-20')).toBe(true)
+  })
+
+  it('pagarla la saca del arrastre', () => {
+    sembrar({ transactions: [] })
+    const internet = addReminder({
+      name: 'Internet',
+      kind: 'expense',
+      recurrence: 'monthly',
+      day: 20,
+      amountCents: 8900,
+      createdOn: DESDE,
+    })
+    markOccurrencePaid(internet.id, '2026-08-20')
+    expect(overdueOccurrences(HOY).some((o) => o.date === '2026-08-20')).toBe(false)
+  })
+
+  it('el de una sola vez aparece en su ciclo y en ninguno más', () => {
+    sembrar({ transactions: [] })
+    addReminder({ name: 'Matrícula', kind: 'expense', recurrence: 'once', date: '2026-09-12', amountCents: 45000, createdOn: DESDE })
+    expect(occurrencesIn('2026-09', HOY)).toHaveLength(1)
+    expect(occurrencesIn('2026-10', HOY)).toHaveLength(0)
+  })
+
+  it('con el ciclo empezando el 28, el recibo cae en el ciclo que lo paga', () => {
+    sembrar({ transactions: [] })
+    setMonthStartDay(28)
+    addReminder({ name: 'Alquiler', kind: 'expense', recurrence: 'monthly', day: 1, amountCents: 90000, createdOn: DESDE })
+    // El ciclo "septiembre" va del 28-ago al 27-sep: el alquiler del 1-sep
+    // cae adentro, y no hay dos ni cero ocurrencias.
+    expect(occurrencesIn('2026-09', HOY).map((o) => o.date)).toEqual(['2026-09-01'])
+  })
+
+  it('un día que el mes no tiene se recorta, en vez de perderse', () => {
+    sembrar({ transactions: [] })
+    addReminder({ name: 'Tarjeta', kind: 'expense', recurrence: 'monthly', day: 31, amountCents: 50000, createdOn: DESDE })
+    expect(occurrencesIn('2026-02', HOY).map((o) => o.date)).toEqual(['2026-02-28'])
+  })
+
+  it('borrar devuelve el recordatorio para poder deshacer', () => {
+    sembrar({ transactions: [] })
+    const luz = addReminder({ name: 'Luz', kind: 'expense', recurrence: 'monthly', day: 15, createdOn: DESDE })
+    expect(deleteReminder(luz.id)?.name).toBe('Luz')
+    expect(occurrencesIn('2026-09', HOY)).toHaveLength(0)
+  })
+
+  it('sin monto se lista igual: hay recibos que no se saben hasta que llegan', () => {
+    sembrar({ transactions: [] })
+    addReminder({ name: 'Agua', kind: 'expense', recurrence: 'monthly', day: 10, createdOn: DESDE })
+    const [o] = occurrencesIn('2026-09', HOY)
+    expect(o.reminder.amountCents).toBeUndefined()
+    expect(o.date).toBe('2026-09-10')
+  })
+})
+
+describe('recordatorios: desde cuándo existen', () => {
+  it('anotar uno hoy NO reclama un año de recibos vencidos', () => {
+    sembrar({ transactions: [] })
+    // Regresión: sin fecha de nacimiento, `overdueOccurrences` calculaba doce
+    // ciclos hacia atrás y aparecían doce recibos que nadie debía.
+    addReminder({
+      name: 'Luz',
+      kind: 'expense',
+      recurrence: 'monthly',
+      day: 10,
+      amountCents: 12000,
+      createdOn: '2026-09-04',
+    })
+    expect(overdueOccurrences('2026-09-20')).toEqual([])
+  })
+
+  it('a partir de que existe, lo que vence sin pagarse sí se arrastra', () => {
+    sembrar({ transactions: [] })
+    addReminder({
+      name: 'Luz',
+      kind: 'expense',
+      recurrence: 'monthly',
+      day: 10,
+      createdOn: '2026-07-01',
+    })
+    expect(overdueOccurrences('2026-09-20').map((o) => o.date)).toEqual([
+      '2026-07-10',
+      '2026-08-10',
+    ])
+  })
+
+  it('restaurar un borrado conserva su fecha de nacimiento y lo ya pagado', () => {
+    sembrar({ transactions: [] })
+    const luz = addReminder({
+      name: 'Luz',
+      kind: 'expense',
+      recurrence: 'monthly',
+      day: 10,
+      createdOn: '2026-07-01',
+    })
+    markOccurrencePaid(luz.id, '2026-07-10')
+    const borrado = deleteReminder(luz.id)!
+    addReminder(borrado)
+
+    // Si al restaurar se pusiera "hoy", julio y agosto volverían como vencidos.
+    expect(overdueOccurrences('2026-09-20').map((o) => o.date)).toEqual(['2026-08-10'])
   })
 })

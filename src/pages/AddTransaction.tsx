@@ -9,8 +9,10 @@ import { CategoryIcon } from '@/components/CategoryIcon'
 import {
   addTransaction,
   cardsForAccount,
+  getReminder,
   getTransaction,
   lastUsedAccountId,
+  markOccurrencePaid,
   updateTransaction,
   useData,
   walletFor,
@@ -66,18 +68,35 @@ export function AddTransaction() {
   const pagando = accounts.find((a) => a.id === params.get('pagar') && a.kind === 'credit')
   const montoSugerido = Number(params.get('monto'))
 
+  /*
+   * «Pagar» desde el calendario: llega el recordatorio y la fecha de la
+   * ocurrencia. Marcar pagado NO crea plata (ADR 0003, D2) — es este
+   * movimiento el que la mueve, y recién al guardarlo se marca la ocurrencia.
+   *
+   * La fecha del movimiento es HOY, no la del vencimiento: pagaste hoy. La del
+   * vencimiento sirve solo para saber qué ocurrencia marcar.
+   */
+  const recordatorio = getReminder(params.get('recordatorio') ?? '')
+  const fechaOcurrencia = params.get('fecha') ?? undefined
+
   const initialNature: Nature =
     existing && existing.nature !== 'adjustment' ? existing.nature : 'expense'
-  const [nature, setNature] = useState<Nature>(pagando ? 'transfer' : initialNature)
+  const [nature, setNature] = useState<Nature>(
+    pagando ? 'transfer' : (recordatorio?.kind ?? initialNature),
+  )
   const esTransferencia = nature === 'transfer'
   const [amount, setAmount] = useState(
     existing
       ? centsToInput(existing.amountCents)
       : pagando && Number.isInteger(montoSugerido) && montoSugerido > 0
         ? centsToInput(montoSugerido)
-        : '',
+        : recordatorio?.amountCents !== undefined
+          ? centsToInput(recordatorio.amountCents)
+          : '',
   )
-  const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
+  const [categoryId, setCategoryId] = useState(
+    existing?.categoryId ?? recordatorio?.categoryId ?? '',
+  )
   const [date, setDate] = useState(existing?.date ?? todayISO())
   const [note, setNote] = useState(existing?.note ?? '')
   // Cuenta: la del movimiento en edición, o la última usada (D1 del ADR 0001).
@@ -204,6 +223,14 @@ export function AddTransaction() {
       toast.success('Movimiento actualizado')
     } else {
       addTransaction(payload)
+      // El movimiento real es el que mueve la plata; la marca viene después y
+      // solo si el movimiento se guardó.
+      if (recordatorio !== undefined && fechaOcurrencia !== undefined) {
+        markOccurrencePaid(recordatorio.id, fechaOcurrencia)
+        toast.success(`${recordatorio.name} registrado y marcado`)
+        navigate('/calendario')
+        return
+      }
       toast.success('Movimiento guardado')
     }
     navigate('/')

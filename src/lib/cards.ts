@@ -108,3 +108,21 @@ export function installmentCents(totalCents: number, count: number, index: numbe
   const base = Math.floor(totalCents / count)
   return index === count - 1 ? totalCents - base * (count - 1) : base
 }
+
+/* ---------- ocurrencias de recordatorios ---------- */
+
+/**
+ * La fecha en que un recordatorio mensual del día `day` cae dentro del ciclo
+ * `[from, to]`. Con el ciclo del usuario arrancando a mitad de mes, el rango
+ * cruza dos meses calendario y el día vive en uno de los dos.
+ *
+ * Devuelve `null` cuando el día no existe dentro del rango — puede pasar en
+ * los bordes, y listarlo en una fecha que no le toca sería inventar un pago.
+ */
+export function monthlyOccurrence(day: number, from: string, to: string): string | null {
+  for (const mes of [from.slice(0, 7), to.slice(0, 7)]) {
+    const fecha = dayInMonth(mes, day)
+    if (fecha >= from && fecha <= to) return fecha
+  }
+  return null
+}

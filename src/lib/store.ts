@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { monthKeyFor, monthsBetween, shiftMonth, todayISO } from '@/lib/format'
-import { cardCycle, installmentCents, type CardCycle } from '@/lib/cards'
+import { cycleRange, monthKeyFor, monthsBetween, shiftMonth, todayISO } from '@/lib/format'
+import { cardCycle, installmentCents, monthlyOccurrence, type CardCycle } from '@/lib/cards'
 import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
 import type {
   Account,
@@ -8,6 +8,7 @@ import type {
   CardBrand,
   Category,
   Medium,
+  Reminder,
   Transaction,
   Wallet,
   WalletProvider,
@@ -54,6 +55,7 @@ function initial(): Data {
     accounts: seedAccounts(),
     cards: [],
     wallets: [],
+    reminders: [],
     categories: DEFAULT_CATEGORIES,
     transactions: [],
     monthlyBudgetCents: 0,
@@ -129,6 +131,7 @@ export function replaceData(next: Data): Data {
     accounts: next.accounts,
     cards: next.cards,
     wallets: next.wallets,
+    reminders: next.reminders,
     categories: next.categories,
     transactions: next.transactions,
     monthlyBudgetCents: next.monthlyBudgetCents,
@@ -794,6 +797,123 @@ export function setMonthStartDay(day: number) {
  */
 export function currentMonthKey(): string {
   return monthKeyFor(todayISO(), data.monthStartDay)
+}
+
+/* ---------- recordatorios y ocurrencias (ADR 0003) ---------- */
+
+export function addReminder(r: Omit<Reminder, 'id' | 'paidOn' | 'createdOn'> & { createdOn?: string; paidOn?: string[] }): Reminder {
+  const reminder: Reminder = {
+    ...r,
+    id: crypto.randomUUID(),
+    paidOn: r.paidOn ?? [],
+    // Al restaurar un borrado se conserva la original: si se pusiera hoy, las
+    // ocurrencias viejas ya pagadas se perderían y volverían como vencidas.
+    createdOn: r.createdOn ?? todayISO(),
+  }
+  commit({ ...data, reminders: [...data.reminders, reminder] })
+  return reminder
+}
+
+export function updateReminder(id: string, patch: Partial<Omit<Reminder, 'id'>>) {
+  commit({
+    ...data,
+    reminders: data.reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+  })
+}
+
+/** Devuelve el borrado para poder deshacer, como con las categorías. */
+export function deleteReminder(id: string): Reminder | undefined {
+  const previo = data.reminders.find((r) => r.id === id)
+  commit({ ...data, reminders: data.reminders.filter((r) => r.id !== id) })
+  return previo
+}
+
+export function getReminder(id: string): Reminder | undefined {
+  return data.reminders.find((r) => r.id === id)
+}
+
+/**
+ * Una vez que toca un recordatorio: qué día, si ya se saldó, y si viene
+ * arrastrada de un ciclo anterior.
+ */
+export interface Occurrence {
+  reminder: Reminder
+  date: string
+  paid: boolean
+  /** Venció sin pagarse: se arrastra hasta que se pague (ADR 0003, D2). */
+  overdue: boolean
+}
+
+function occurrenceIn(reminder: Reminder, from: string, to: string, today: string): Occurrence | null {
+  const date =
+    reminder.recurrence === 'once'
+      ? ((reminder.date ?? '') >= from && (reminder.date ?? '') <= to ? reminder.date! : null)
+      : reminder.day === undefined
+        ? null
+        : monthlyOccurrence(reminder.day, from, to)
+  // Nada antes de que el recordatorio existiera: no se le puede reclamar al
+  // usuario un recibo de un mes en que la app ni sabía del recordatorio.
+  if (date === null || date < reminder.createdOn) return null
+  const paid = reminder.paidOn.includes(date)
+  return { reminder, date, paid, overdue: !paid && date < today }
+}
+
+/** Lo que toca en un ciclo, ordenado por fecha. No incluye lo arrastrado. */
+export function occurrencesIn(month: string, today: string = todayISO()): Occurrence[] {
+  const { from, to } = cycleRange(month, data.monthStartDay)
+  return data.reminders
+    .flatMap((r) => {
+      const o = occurrenceIn(r, from, to, today)
+      return o === null ? [] : [o]
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+/**
+ * Cuántos ciclos hacia atrás se buscan vencidas. Una deuda no desaparece al
+ * cambiar de mes (ADR 0003), pero tampoco tiene sentido arrastrar un recibo de
+ * hace tres años: a esa altura ya no es un recordatorio olvidado, es basura.
+ */
+const CICLOS_ATRAS = 12
+
+/**
+ * Lo que venció y sigue sin pagarse, de ciclos anteriores al actual. Va aparte
+ * de `occurrencesIn` porque no pertenece a este ciclo: se muestra acá porque
+ * hay que pagarlo, no porque toque ahora.
+ */
+export function overdueOccurrences(today: string = todayISO()): Occurrence[] {
+  const actual = currentMonthKey()
+  const out: Occurrence[] = []
+  for (let i = 1; i <= CICLOS_ATRAS; i++) {
+    for (const o of occurrencesIn(shiftMonth(actual, -i), today)) {
+      if (o.overdue) out.push(o)
+    }
+  }
+  return out.sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+/**
+ * Marca una ocurrencia como saldada. NO mueve plata: eso lo hace el movimiento
+ * real que registra el flujo «Pagar» (ADR 0003, D2). Marcar acá sin registrar
+ * el movimiento deja el recordatorio en orden y los saldos intactos, que es
+ * exactamente lo que corresponde cuando el usuario pagó por fuera de la app.
+ */
+export function markOccurrencePaid(reminderId: string, date: string) {
+  commit({
+    ...data,
+    reminders: data.reminders.map((r) =>
+      r.id === reminderId && !r.paidOn.includes(date) ? { ...r, paidOn: [...r.paidOn, date] } : r,
+    ),
+  })
+}
+
+export function unmarkOccurrencePaid(reminderId: string, date: string) {
+  commit({
+    ...data,
+    reminders: data.reminders.map((r) =>
+      r.id === reminderId ? { ...r, paidOn: r.paidOn.filter((d) => d !== date) } : r,
+    ),
+  })
 }
 
 /* ---------- selectores ---------- */
