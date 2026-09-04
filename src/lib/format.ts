@@ -71,6 +71,13 @@ export function monthShort(key: string): string {
   return MONTHS[Number(m) - 1].slice(0, 3)
 }
 
+/** Cuántos meses hay de `from` a `to` (negativo si `to` es anterior). */
+export function monthsBetween(from: string, to: string): number {
+  const [y1, m1] = from.split('-').map(Number)
+  const [y2, m2] = to.split('-').map(Number)
+  return (y2 - y1) * 12 + (m2 - m1)
+}
+
 /** Devuelve la clave de mes desplazada `delta` meses. */
 export function shiftMonth(key: string, delta: number): string {
   const [y, m] = key.split('-').map(Number)

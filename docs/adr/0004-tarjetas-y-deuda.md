@@ -100,7 +100,13 @@ la realidad la declara el usuario, la app anota el delta y no inventa un gasto.
 ### D6 — Cuotas: un movimiento con su plan
 
 Una compra en cuotas es **un solo movimiento** en el historial (monto total, fecha real,
-categoría, tarjeta) con su plan pegado: `installments: { count, paid }`.
+categoría, tarjeta) con su plan pegado: `installmentCount`.
+
+*(Al implementarlo, el `paid` que este ADR anotaba en el plan se cayó: en qué cuota vas
+se DERIVA de la fecha. Un contador guardado hay que ir avanzándolo y queda mal apenas se
+lo olvide, y ya se conoce ese error en el modelo. El resto de la división cae en la
+última cuota, así que las anteriores son el número redondo del estado de cuenta y la suma
+de todas es exactamente el total.)*
 
 - La **deuda** es el total desde el día uno: eso es lo que se debe.
 - El **presupuesto del mes** siente solo la cuota que toca.

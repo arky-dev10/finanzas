@@ -8,7 +8,7 @@ import { MonthNav } from '@/components/MonthNav'
 import { TransactionItem } from '@/components/TransactionItem'
 import { budgetState } from '@/lib/budget'
 import { formatMoney, shiftMonth } from '@/lib/format'
-import { budgetStatus, currentMonthKey, getCategory, transactionsByMonth, useData } from '@/lib/store'
+import { budgetStatus, currentMonthKey, getCategory, monthEntries, useData } from '@/lib/store'
 import type { Category, CategoryKind } from '@/types'
 
 const MESES_EVOLUCION = 6
@@ -21,13 +21,13 @@ const MESES_EVOLUCION = 6
  */
 function categoryTotal(month: string, categoryId: string, kind: CategoryKind): number {
   let total = 0
-  for (const t of transactionsByMonth(month)) {
-    if (t.categoryId !== categoryId) continue
+  for (const { tx, centsInMonth } of monthEntries(month)) {
+    if (tx.categoryId !== categoryId) continue
     if (kind === 'expense') {
-      if (t.nature === 'expense') total += t.amountCents
-      else if (t.nature === 'refund') total -= t.amountCents
-    } else if (t.nature === 'income') {
-      total += t.amountCents
+      if (tx.nature === 'expense') total += centsInMonth
+      else if (tx.nature === 'refund') total -= centsInMonth
+    } else if (tx.nature === 'income') {
+      total += centsInMonth
     }
   }
   return total
@@ -54,7 +54,7 @@ export function CategoryDetail() {
     const m = shiftMonth(currentMonthKey(), -(MESES_EVOLUCION - 1 - i))
     return { month: m, total: categoryTotal(m, category.id, category.type) }
   })
-  const movimientos = transactionsByMonth(month).filter((t) => t.categoryId === category.id)
+  const movimientos = monthEntries(month).filter((e) => e.tx.categoryId === category.id)
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-4 pt-nav">
@@ -98,7 +98,9 @@ export function CategoryDetail() {
               Sin movimientos este mes.
             </p>
           ) : (
-            movimientos.map((tx) => <TransactionItem key={tx.id} tx={tx} />)
+            movimientos.map((e) => (
+              <TransactionItem key={`${e.tx.id}-${e.installment ?? 0}`} {...e} />
+            ))
           )}
         </div>
       </section>

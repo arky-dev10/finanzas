@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardCycle, dayInMonth, dueLabel, nextDay } from '@/lib/cards'
+import { cardCycle, dayInMonth, dueLabel, installmentCents, nextDay } from '@/lib/cards'
 
 describe('dayInMonth', () => {
   it('recorta el día al último que el mes tenga', () => {
@@ -89,5 +89,34 @@ describe('dueLabel', () => {
     expect(dueLabel('2026-09-05', '2026-09-04')).toBe('vence mañana')
     expect(dueLabel('2026-09-01', '2026-09-04')).toBe('venció hace 3 días')
     expect(dueLabel('2026-09-03', '2026-09-04')).toBe('venció ayer')
+  })
+})
+
+describe('installmentCents', () => {
+  const sumar = (total: number, count: number) =>
+    Array.from({ length: count }, (_, i) => installmentCents(total, count, i)).reduce(
+      (a, b) => a + b,
+      0,
+    )
+
+  it('reparte parejo cuando divide exacto', () => {
+    // S/ 1,200 en 12 cuotas de S/ 100.
+    expect(installmentCents(120000, 12, 0)).toBe(10000)
+    expect(installmentCents(120000, 12, 11)).toBe(10000)
+  })
+
+  it('el resto cae en la última cuota, no en las de todos los meses', () => {
+    // S/ 1,000 en 3: 333.33 · 333.33 · 333.34
+    expect(installmentCents(100000, 3, 0)).toBe(33333)
+    expect(installmentCents(100000, 3, 1)).toBe(33333)
+    expect(installmentCents(100000, 3, 2)).toBe(33334)
+  })
+
+  it('la suma de las cuotas es siempre el total exacto', () => {
+    for (const total of [100000, 120000, 99999, 1, 7, 350055]) {
+      for (const count of [2, 3, 6, 12, 18, 24]) {
+        expect(sumar(total, count)).toBe(total)
+      }
+    }
   })
 })

@@ -27,7 +27,7 @@ import {
   monthTotals,
   totalDebtCents,
   totalInAccounts,
-  transactionsByMonth,
+  monthEntries,
   useData,
   type MonthlyBudgetStatus,
 } from '@/lib/store'
@@ -68,7 +68,7 @@ export function Dashboard() {
   const [verTodas, setVerTodas] = useState(false)
 
   const totals = monthTotals(month)
-  const recent = transactionsByMonth(month).slice(0, RECENT)
+  const recent = monthEntries(month).slice(0, RECENT)
   const alertas = budgetStatus(month).filter((b) => b.pct >= ATENCION)
   const tope = monthlyBudgetStatus(month)
   const { totalCents, reliable } = totalInAccounts()
@@ -333,7 +333,9 @@ export function Dashboard() {
               Aún no hay movimientos.
             </p>
           ) : (
-            recent.map((tx) => <TransactionItem key={tx.id} tx={tx} />)
+            recent.map((e) => (
+              <TransactionItem key={`${e.tx.id}-${e.installment ?? 0}`} {...e} />
+            ))
           )}
         </div>
       </section>

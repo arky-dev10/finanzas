@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { monthKeyFor, shiftMonth, todayISO } from '@/lib/format'
-import { cardCycle, type CardCycle } from '@/lib/cards'
+import { monthKeyFor, monthsBetween, shiftMonth, todayISO } from '@/lib/format'
+import { cardCycle, installmentCents, type CardCycle } from '@/lib/cards'
 import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
 import type {
   Account,
@@ -175,6 +175,11 @@ function normalize(tx: Transaction): Transaction {
     if (limpio.toAccountId === limpio.accountId) delete limpio.toAccountId
   } else {
     delete limpio.toAccountId
+  }
+  // Una cuota sola es una compra normal, y nada que no sea un gasto se paga de
+  // a partes: un plan colgado ahí solo confundiría a los selectores.
+  if (limpio.nature !== 'expense' || (limpio.installmentCount ?? 0) < 2) {
+    delete limpio.installmentCount
   }
   return limpio
 }
@@ -793,6 +798,57 @@ export function currentMonthKey(): string {
 
 /* ---------- selectores ---------- */
 
+/**
+ * Cómo pesa un movimiento en un ciclo dado. Sin cuotas es todo o nada: pesa
+ * entero en su propio ciclo y cero en los demás. Con cuotas se reparte —el
+ * presupuesto siente solo la cuota que toca (ADR 0004, D6)— y por eso un mismo
+ * movimiento aparece en varios ciclos.
+ *
+ * El reparto usa el ciclo del USUARIO, no el de la tarjeta: lo que se está
+ * repartiendo es el presupuesto, y el presupuesto es mensual del usuario.
+ */
+export interface MonthEntry {
+  tx: Transaction
+  /** Lo que pesa en este ciclo. Igual a `tx.amountCents` salvo en cuotas. */
+  centsInMonth: number
+  /** En qué cuota va, 1..count. Solo en compras en cuotas. */
+  installment?: number
+  installmentCount?: number
+}
+
+function entryFor(t: Transaction, month: string): MonthEntry | null {
+  const propio = monthKeyFor(t.date, data.monthStartDay)
+  const count = t.installmentCount
+  // Las cuotas solo tienen sentido en un gasto: una devolución o un ajuste no
+  // se pagan de a partes.
+  if (count === undefined || count < 2 || t.nature !== 'expense') {
+    return propio === month ? { tx: t, centsInMonth: t.amountCents } : null
+  }
+  const i = monthsBetween(propio, month)
+  if (i < 0 || i >= count) return null
+  return {
+    tx: t,
+    centsInMonth: installmentCents(t.amountCents, count, i),
+    installment: i + 1,
+    installmentCount: count,
+  }
+}
+
+/**
+ * Todo lo que pesa en un ciclo: los movimientos de ese ciclo y las cuotas de
+ * compras anteriores que todavía se están pagando. Sin esto, el total del mes
+ * incluiría una cuota que no aparece en ninguna fila y el usuario no tendría
+ * de dónde sacar el número.
+ */
+export function monthEntries(month: string): MonthEntry[] {
+  return data.transactions
+    .flatMap((t) => {
+      const e = entryFor(t, month)
+      return e === null ? [] : [e]
+    })
+    .sort((a, b) => (a.tx.date < b.tx.date ? 1 : -1))
+}
+
 export function transactionsByMonth(month: string): Transaction[] {
   // Agrupa por ciclo, no por mes calendario: los demás selectores mensuales
   // (totales, categorías, presupuestos) heredan el ciclo pasando por acá.
@@ -809,10 +865,10 @@ export function transactionsByMonth(month: string): Transaction[] {
 export function monthTotals(month: string) {
   let income = 0
   let expense = 0
-  for (const t of transactionsByMonth(month)) {
-    if (t.nature === 'income') income += t.amountCents
-    else if (t.nature === 'expense') expense += t.amountCents
-    else if (t.nature === 'refund') expense -= t.amountCents
+  for (const { tx, centsInMonth } of monthEntries(month)) {
+    if (tx.nature === 'income') income += centsInMonth
+    else if (tx.nature === 'expense') expense += centsInMonth
+    else if (tx.nature === 'refund') expense -= centsInMonth
   }
   return { income, expense, balance: income - expense }
 }
@@ -824,10 +880,11 @@ export function monthTotals(month: string) {
  */
 export function expenseByCategory(month: string) {
   const map = new Map<string, number>()
-  for (const t of transactionsByMonth(month)) {
-    if (t.categoryId === undefined) continue
-    if (t.nature === 'expense') map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + t.amountCents)
-    else if (t.nature === 'refund') map.set(t.categoryId, (map.get(t.categoryId) ?? 0) - t.amountCents)
+  for (const { tx, centsInMonth } of monthEntries(month)) {
+    if (tx.categoryId === undefined) continue
+    if (tx.nature === 'expense') map.set(tx.categoryId, (map.get(tx.categoryId) ?? 0) + centsInMonth)
+    else if (tx.nature === 'refund')
+      map.set(tx.categoryId, (map.get(tx.categoryId) ?? 0) - centsInMonth)
   }
   return [...map.entries()]
     .map(([categoryId, total]) => ({ categoryId, total }))

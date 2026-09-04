@@ -196,6 +196,7 @@ interface Transaction {
   categoryId?: string  // obligatorio salvo en adjustment y transfer
   medium?: Medium      // nunca en cuentas cash
   cardId?: string      // con qué tarjeta; es una etiqueta, no mueve el saldo
+  installmentCount?: number  // en cuántas cuotas; 2+, solo en gastos con crédito
   date: string         // YYYY-MM-DD
   note?: string
 }
@@ -440,6 +441,10 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
 - [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
       con tarjeta de crédito cuenta el día de la compra, con su categoría
+- [x] Compras en cuotas: un solo movimiento con su plan, deuda entera desde el
+      día uno y presupuesto que solo siente la cuota. La cuota reaparece en los
+      ciclos siguientes como una fila propia («cuota 4 de 12»), para que el
+      total del mes no tenga plata sin fila que la explique
 - [x] Ciclo de facturación por tarjeta (`src/lib/cards.ts`): «por pagar y
       cuándo» como número protagonista, consumo en curso aparte, conciliación
       contra el estado de cuenta real y flujo Pagar prellenado
@@ -449,9 +454,8 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
 
 ### Pendiente / ideas
 
-Los bloques 4 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
+Los bloques 5 y 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
 
-- **Cuotas**: plan en el movimiento, peso por ciclo en el presupuesto, «vas 3 de 12».
 - **Calendario y recordatorios** (ADR 0003 + su enmienda).
 - **Disponible**: el número nuevo del Resumen.
 

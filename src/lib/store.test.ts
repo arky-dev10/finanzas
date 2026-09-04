@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatMoney, monthKey } from '@/lib/format'
+import { formatMoney, monthKey, shiftMonth } from '@/lib/format'
 import {
   accountBalanceCents,
   accountDebtCents,
@@ -21,6 +21,7 @@ import {
   getCard,
   getData,
   lastUsedAccountId,
+  monthEntries,
   monthTotals,
   monthlyBudgetStatus,
   replaceData,
@@ -888,5 +889,120 @@ describe('estado de cuenta', () => {
     confirmStatement(visa.accountId, 128350, HOY)
     // Un mes después ya cerró otro período: ese todavía no lo confirmó nadie.
     expect(creditCardStatus(visa.accountId, '2026-10-10')!.confirmed).toBe(false)
+  })
+})
+
+/* ---------- cuotas (ADR 0004, D6) ---------- */
+
+describe('cuotas', () => {
+  /** Refrigeradora de S/ 1,200 en 12 cuotas, comprada el 3 de septiembre. */
+  function comprarEnCuotas(count = 12) {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 5, dueDay: 22 })
+    addAdjustment(visa.accountId, 0, '2026-09-01')
+    addTransaction({
+      amountCents: 120000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-03',
+      installmentCount: count,
+    })
+    return visa
+  }
+
+  it('la compra sigue siendo UN movimiento en el historial', () => {
+    comprarEnCuotas()
+    const compras = getData().transactions.filter((t) => t.nature === 'expense')
+    expect(compras).toHaveLength(1)
+    expect(compras[0].amountCents).toBe(120000)
+  })
+
+  it('la deuda es el total desde el día uno: te comprometiste por todo', () => {
+    const visa = comprarEnCuotas()
+    expect(accountDebtCents(visa.accountId)).toBe(120000)
+  })
+
+  it('el presupuesto del mes siente solo la cuota', () => {
+    comprarEnCuotas()
+    expect(monthTotals('2026-09').expense).toBe(10000)
+    expect(expenseByCategory('2026-09')).toEqual([{ categoryId: 'c_food', total: 10000 }])
+  })
+
+  it('la cuota reaparece en los once ciclos siguientes, y en ninguno más', () => {
+    comprarEnCuotas()
+    expect(monthTotals('2027-08').expense).toBe(10000) // cuota 12
+    expect(monthTotals('2027-09').expense).toBe(0) // ya terminó
+    expect(monthTotals('2026-08').expense).toBe(0) // antes de comprar
+  })
+
+  it('las doce cuotas suman exactamente la compra', () => {
+    comprarEnCuotas()
+    let total = 0
+    for (let i = 0; i < 12; i++) total += monthTotals(shiftMonth('2026-09', i)).expense
+    expect(total).toBe(120000)
+  })
+
+  it('cada ciclo dice en qué cuota vas', () => {
+    comprarEnCuotas()
+    const [e1] = monthEntries('2026-09')
+    expect(e1.installment).toBe(1)
+    expect(e1.installmentCount).toBe(12)
+    expect(e1.centsInMonth).toBe(10000)
+    // Y la compra entera sigue siendo la del movimiento.
+    expect(e1.tx.amountCents).toBe(120000)
+
+    expect(monthEntries('2026-12')[0].installment).toBe(4)
+    expect(monthEntries('2027-09')).toEqual([])
+  })
+
+  it('la cuota respeta el ciclo del usuario, no el mes calendario', () => {
+    comprarEnCuotas()
+    // Con el mes arrancando el 28, el 3 de septiembre cae en el ciclo de
+    // septiembre igual; pero una compra del 29 de agosto también.
+    setMonthStartDay(28)
+    addTransaction({
+      amountCents: 60000,
+      nature: 'expense',
+      accountId: getData().accounts.find((a) => a.kind === 'credit')!.id,
+      categoryId: 'c_fun',
+      date: '2026-08-29',
+      installmentCount: 6,
+    })
+    expect(monthEntries('2026-09').map((e) => e.installment).sort()).toEqual([1, 1])
+  })
+
+  it('un movimiento que no es gasto no guarda plan de cuotas', () => {
+    sembrar({ transactions: [] })
+    addTransaction({
+      amountCents: 60000,
+      nature: 'income',
+      accountId: 'a_bcp',
+      categoryId: 'c_salary',
+      date: '2026-09-03',
+      installmentCount: 6,
+    })
+    expect(getData().transactions[0].installmentCount).toBeUndefined()
+    expect(monthTotals('2026-09').income).toBe(60000)
+  })
+
+  it('una sola cuota es una compra normal', () => {
+    sembrar({ transactions: [] })
+    addTransaction({
+      amountCents: 60000,
+      nature: 'expense',
+      accountId: 'a_bcp',
+      categoryId: 'c_food',
+      date: '2026-09-03',
+      installmentCount: 1,
+    })
+    expect(getData().transactions[0].installmentCount).toBeUndefined()
+    expect(monthTotals('2026-09').expense).toBe(60000)
+  })
+
+  it('con un total que no divide exacto, el resto va en la última cuota', () => {
+    comprarEnCuotas(7) // 120000 / 7 = 17142.85…
+    expect(monthEntries('2026-09')[0].centsInMonth).toBe(17142)
+    expect(monthEntries('2027-03')[0].centsInMonth).toBe(120000 - 17142 * 6)
   })
 })

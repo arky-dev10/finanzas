@@ -125,6 +125,15 @@ export interface Transaction {
   medium?: Medium
   /** Con qué tarjeta se hizo, cuando el usuario lo precisa. */
   cardId?: string
+  /**
+   * En cuántas cuotas se paga esta compra (2 o más; una sola cuota es una
+   * compra normal). La compra sigue siendo UN movimiento: la deuda es el total
+   * desde el día uno y el presupuesto solo siente la cuota (ADR 0004, D6).
+   *
+   * En qué cuota vas NO se guarda: se deriva de la fecha. Un contador guardado
+   * habría que ir avanzándolo, y quedaría mal apenas se lo olvide.
+   */
+  installmentCount?: number
   date: string
   note?: string
 }

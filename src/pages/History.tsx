@@ -13,7 +13,7 @@ import {
   getCategory,
   lastMonthsTotals,
   monthTotals,
-  transactionsByMonth,
+  monthEntries,
   useData,
 } from '@/lib/store'
 
@@ -28,7 +28,7 @@ export function History() {
   const [selected, setSelected] = useState<string | null>(null)
 
   const totals = monthTotals(month)
-  const txs = transactionsByMonth(month)
+  const txs = monthEntries(month)
   const months = lastMonthsTotals(6, currentMonthKey())
   const porCategoria = expenseByCategory(month)
 
@@ -65,8 +65,8 @@ export function History() {
   const referencia = totals.expense > 0 ? totals.expense : enLaDona
 
   const devuelto = txs
-    .filter((t) => t.nature === 'refund')
-    .reduce((s, t) => s + t.amountCents, 0)
+    .filter((e) => e.tx.nature === 'refund')
+    .reduce((s, e) => s + e.centsInMonth, 0)
   const negativas = porCategoria
     .filter((e) => e.total < 0)
     .map((e) => getCategory(e.categoryId)?.name)
@@ -191,7 +191,9 @@ export function History() {
               Sin movimientos este mes.
             </p>
           ) : (
-            txs.map((tx) => <TransactionItem key={tx.id} tx={tx} />)
+            txs.map((e) => (
+              <TransactionItem key={`${e.tx.id}-${e.installment ?? 0}`} {...e} />
+            ))
           )}
         </div>
       </section>

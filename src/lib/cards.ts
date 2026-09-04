@@ -93,3 +93,18 @@ export function dueLabel(dueDate: string, today: string): string {
 
 /** El ciclo del usuario al que pertenece una fecha; re-exportado por comodidad. */
 export { monthKeyFor }
+
+/* ---------- cuotas ---------- */
+
+/**
+ * El monto de la cuota `index` (0-based) de un total repartido en `count`.
+ *
+ * El resto de la división cae en la ÚLTIMA cuota: así las anteriores son el
+ * número redondo que el usuario ve en su estado de cuenta mes a mes, y el
+ * desajuste de céntimos se salda al final en vez de arrastrarse. La suma de
+ * todas las cuotas es exactamente el total, siempre.
+ */
+export function installmentCents(totalCents: number, count: number, index: number): number {
+  const base = Math.floor(totalCents / count)
+  return index === count - 1 ? totalCents - base * (count - 1) : base
+}

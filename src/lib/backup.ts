@@ -221,6 +221,14 @@ function isTransaction(v: unknown): v is Transaction {
   }
   if (t.medium !== undefined && !MEDIUMS.includes(t.medium as string)) return false
   if (t.cardId !== undefined && typeof t.cardId !== 'string') return false
+  // Un plan de una cuota (o de media) no es un plan; en el resto del modelo
+  // «tiene cuotas» significa 2 o más y los selectores cuentan con eso.
+  if (
+    t.installmentCount !== undefined &&
+    !(Number.isInteger(t.installmentCount) && (t.installmentCount as number) >= 2)
+  ) {
+    return false
+  }
   return t.note === undefined || typeof t.note === 'string'
 }
 
@@ -301,11 +309,15 @@ function normalizeTransactions(
     // La tarjeta es una etiqueta: si no existe se cae la etiqueta, nunca el
     // movimiento. Un movimiento es plata; borrarlo movería un saldo real.
     const sobraTarjeta = t.cardId !== undefined && !cardIds.has(t.cardId)
-    if (!sobraMedio && !sobraCategoria && !sobraTarjeta) return t
+    // Solo un gasto se paga en cuotas: colgadas de otra naturaleza, los
+    // selectores repartirían en varios ciclos algo que ocurrió en uno solo.
+    const sobranCuotas = t.installmentCount !== undefined && t.nature !== 'expense'
+    if (!sobraMedio && !sobraCategoria && !sobraTarjeta && !sobranCuotas) return t
     const limpio = { ...t }
     if (sobraMedio) delete limpio.medium
     if (sobraCategoria) delete limpio.categoryId
     if (sobraTarjeta) delete limpio.cardId
+    if (sobranCuotas) delete limpio.installmentCount
     return limpio
   })
 }

@@ -15,11 +15,15 @@ import {
   useData,
   walletFor,
 } from '@/lib/store'
-import { centsToInput, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
+import { centsToInput, formatMoney, parseAmountToCents, sanitizeAmount, todayISO } from '@/lib/format'
+import { installmentCents } from '@/lib/cards'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/backup'
 import type { Account, Medium, TxNature } from '@/types'
 
 const ACCOUNT_ICON = { bank: Landmark, cash: Wallet, credit: CreditCard } as const
+
+/** Los planes que ofrecen los bancos en Perú. El 3 y el 12 son los de siempre. */
+const CUOTAS = [3, 6, 9, 12, 18, 24]
 
 /** Las naturalezas que se eligen acá. El ajuste no: se crea desde Cuentas. */
 type Nature = Exclude<TxNature, 'adjustment'>
@@ -95,11 +99,22 @@ export function AddTransaction() {
   const [toAccountId, setToAccountId] = useState<string | undefined>(
     existing?.toAccountId ?? pagando?.id,
   )
+  const [installmentCount, setInstallmentCount] = useState<number | undefined>(
+    existing?.installmentCount,
+  )
 
   // Las tarjetas que abren la cuenta elegida. En una de crédito es una sola —
   // la suya— y no hay nada que elegir; en un banco pueden ser varias.
   const tarjetas = cardsForAccount(accountId).filter((c) => c.kind === 'debit')
   const destino = accounts.find((a) => a.id === toAccountId)
+  // Las cuotas son cosa de la tarjeta de crédito: en efectivo o en débito la
+  // plata sale entera y no hay nada que repartir.
+  const enCuotas = account?.kind === 'credit' && nature === 'expense'
+  const centavos = parseAmountToCents(amount)
+  const cuotaSugerida =
+    installmentCount === undefined || centavos === null || centavos <= 0
+      ? null
+      : installmentCents(centavos, installmentCount, 0)
 
   // La devolución usa las categorías de gasto: resta de ese gasto, no es un ingreso.
   const cats = useMemo(
@@ -136,6 +151,7 @@ export function AddTransaction() {
     // Si el nuevo origen era el destino, la transferencia se volvería sobre sí
     // misma: se suelta el destino y el usuario elige de nuevo.
     if (a.id === toAccountId) setToAccountId(undefined)
+    if (a.kind !== 'credit') setInstallmentCount(undefined)
   }
 
   /**
@@ -177,6 +193,9 @@ export function AddTransaction() {
       toAccountId: esTransferencia ? toAccountId : undefined,
       medium: account?.kind === 'cash' ? undefined : medium,
       cardId,
+      // Solo un gasto con tarjeta de crédito se paga en cuotas; el store lo
+      // normaliza igual, pero mandar un plan que no aplica sería mentirle.
+      installmentCount: enCuotas ? installmentCount : undefined,
       date,
       note: note.trim() || undefined,
     }
@@ -230,6 +249,7 @@ export function AddTransaction() {
             onClick={() => {
               setNature(n.id)
               setCategoryId('')
+              if (n.id !== 'expense') setInstallmentCount(undefined)
             }}
             className={`rounded-xl border-2 py-2.5 text-sm font-medium transition ${
               nature === n.id ? n.active : 'border-border text-muted-foreground'
@@ -244,6 +264,7 @@ export function AddTransaction() {
         onClick={() => {
           setNature('transfer')
           setCategoryId('')
+          setInstallmentCount(undefined)
         }}
         className={`mb-5 flex items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-medium transition ${
           esTransferencia ? TRANSFER_ACTIVE : 'border-border text-muted-foreground'
@@ -375,6 +396,44 @@ export function AddTransaction() {
           </>
         )}
       </div>
+
+      {enCuotas && (
+        <div className="mb-5 flex flex-col gap-2.5">
+          <span className="text-xs font-medium text-muted-foreground">En cuotas</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setInstallmentCount(undefined)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                installmentCount === undefined
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : 'border-border text-muted-foreground'
+              }`}
+            >
+              Sin cuotas
+            </button>
+            {CUOTAS.map((n) => (
+              <button
+                key={n}
+                onClick={() => setInstallmentCount(n)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  installmentCount === n
+                    ? 'border-accent bg-accent text-accent-foreground'
+                    : 'border-border text-muted-foreground'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {installmentCount !== undefined && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {cuotaSugerida === null
+                ? `Se reparte en ${installmentCount} cuotas.`
+                : `${installmentCount} cuotas de ${formatMoney(cuotaSugerida)}. Debes el total desde hoy, pero tu presupuesto del mes solo siente la cuota.`}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mb-5 flex flex-col gap-4">
         <div className="grid gap-2">

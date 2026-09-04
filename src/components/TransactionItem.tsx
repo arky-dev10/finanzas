@@ -26,8 +26,26 @@ const MEDIOS: Record<Medium, string> = {
  * color del monto y palabra en el detalle— para entenderla de un vistazo sin
  * agregarle adornos a la fila.
  */
-export function TransactionItem({ tx }: { tx: Transaction }) {
+/**
+ * `installment` viene del ciclo que se está mirando, no del movimiento: la
+ * misma compra en cuotas se ve como la compra entera en el mes en que se hizo
+ * y como «cuota N de 12» en los siguientes (ADR 0004, D6).
+ */
+export function TransactionItem({
+  tx,
+  installment,
+  installmentCount,
+  centsInMonth,
+}: {
+  tx: Transaction
+  installment?: number
+  installmentCount?: number
+  centsInMonth?: number
+}) {
   const navigate = useNavigate()
+  // La primera cuota se ve en el mes de la compra, así que ahí manda la compra
+  // entera: es lo que pasó ese día, y es lo que hay que poder reconocer.
+  const esEco = installment !== undefined && installment > 1
   const cat = tx.categoryId ? getCategory(tx.categoryId) : undefined
   const esAjuste = tx.nature === 'adjustment'
   const esDevolucion = tx.nature === 'refund'
@@ -44,7 +62,7 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
   }
 
   // El signo de un movimiento tiene una sola definición, y vive en el store.
-  const monto = signedCents(tx)
+  const monto = esEco ? -(centsInMonth ?? tx.amountCents) : signedCents(tx)
   const tono =
     tx.nature === 'income'
       ? 'text-emerald-600'
@@ -63,11 +81,24 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
   const destino = tx.toAccountId ? getAccount(tx.toAccountId) : undefined
   // En una transferencia lo que importa es el recorrido, no el medio: de dónde
   // salió y a dónde entró es lo único que explica por qué se movieron dos saldos.
+  /*
+   * En una compra en cuotas el detalle explica de dónde sale el número: en el
+   * mes de la compra, cuánto de esos S/ 1,200 pesa este mes; en los siguientes,
+   * qué cuota es y de cuándo viene la compra. Sin esto el total del mes tendría
+   * plata que no está en ninguna fila.
+   */
+  const cuotas =
+    installmentCount === undefined
+      ? null
+      : esEco
+        ? `cuota ${installment} de ${installmentCount} · compra del ${shortDate(tx.date)}`
+        : `${installmentCount} cuotas · ${formatMoney(centsInMonth ?? 0)} este mes`
+
   const detalle = esAjuste
     ? [cuenta?.name, tx.note]
     : esTransferencia
       ? [`${cuenta?.name ?? '—'} → ${destino?.name ?? '—'}`, tx.note]
-      : [tx.note, medio]
+      : [cuotas, tx.note, medio]
 
   return (
     <div className="flex items-center gap-3 pr-3">
@@ -112,13 +143,15 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
           </span>
         </span>
       </button>
-      <button
-        onClick={remove}
-        className="text-muted-foreground/50 transition hover:text-destructive"
-        aria-label="Eliminar movimiento"
-      >
-        <Trash2 size={16} />
-      </button>
+      {!esEco && (
+        <button
+          onClick={remove}
+          className="text-muted-foreground/50 transition hover:text-destructive"
+          aria-label="Eliminar movimiento"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
     </div>
   )
 }
