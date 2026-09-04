@@ -327,3 +327,42 @@ describe('parseData — v5', () => {
     expect(parseData({ ...v5, accounts })).toBe(null)
   })
 })
+
+describe('parseData — transferencias', () => {
+  const transferencia = {
+    id: 'tr',
+    amountCents: 20000,
+    nature: 'transfer',
+    accountId: 'a_bcp',
+    toAccountId: 'a_visa',
+    date: '2026-09-20',
+  }
+
+  it('acepta una transferencia con sus dos cuentas', () => {
+    const d = parseData({ ...v5, transactions: [transferencia] })!
+    expect(d.transactions[0].toAccountId).toBe('a_visa')
+  })
+
+  it('rechaza una transferencia sin destino: la plata saldría hacia ningún lado', () => {
+    const { toAccountId: _omitido, ...sinDestino } = transferencia
+    expect(parseData({ ...v5, transactions: [sinDestino] })).toBe(null)
+  })
+
+  it('rechaza una transferencia a su propia cuenta', () => {
+    expect(
+      parseData({ ...v5, transactions: [{ ...transferencia, toAccountId: 'a_bcp' }] }),
+    ).toBe(null)
+  })
+
+  it('rechaza un destino colgado de un movimiento que no es transferencia', () => {
+    const gasto = { ...transferencia, nature: 'expense', categoryId: 'c_food' }
+    expect(parseData({ ...v5, transactions: [gasto] })).toBe(null)
+  })
+
+  it('le quita la categoría a una transferencia: borrar esa categoría movería saldos', () => {
+    const conCategoria = { ...transferencia, categoryId: 'c_food' }
+    const d = parseData({ ...v5, transactions: [conCategoria] })!
+    expect(d.transactions[0].categoryId).toBeUndefined()
+    expect(d.transactions[0].toAccountId).toBe('a_visa')
+  })
+})

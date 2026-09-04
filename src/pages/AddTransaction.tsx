@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CreditCard, Landmark, Wallet } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,11 +24,18 @@ const ACCOUNT_ICON = { bank: Landmark, cash: Wallet, credit: CreditCard } as con
 /** Las naturalezas que se eligen acá. El ajuste no: se crea desde Cuentas. */
 type Nature = Exclude<TxNature, 'adjustment'>
 
+/*
+ * Las tres primeras son plata que entra o sale de tu vida. La transferencia no
+ * es ninguna de esas —la plata sigue siendo tuya, solo cambió de lugar— y por
+ * eso va aparte, en su propia fila, en vez de como una cuarta hermana.
+ */
 const NATURES: { id: Nature; label: string; active: string }[] = [
   { id: 'expense', label: 'Gasto', active: 'border-rose-500 bg-rose-50 text-rose-600' },
   { id: 'income', label: 'Ingreso', active: 'border-emerald-500 bg-emerald-50 text-emerald-600' },
   { id: 'refund', label: 'Devolución', active: 'border-accent bg-accent text-accent-foreground' },
 ]
+
+const TRANSFER_ACTIVE = 'border-sky-500 bg-sky-50 text-sky-700'
 
 const MEDIA: { id: Medium; label: string }[] = [
   { id: 'yape', label: 'Yape' },
@@ -48,6 +55,7 @@ export function AddTransaction() {
   const initialNature: Nature =
     existing && existing.nature !== 'adjustment' ? existing.nature : 'expense'
   const [nature, setNature] = useState<Nature>(initialNature)
+  const esTransferencia = nature === 'transfer'
   const [amount, setAmount] = useState(existing ? centsToInput(existing.amountCents) : '')
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '')
   const [date, setDate] = useState(existing?.date ?? todayISO())
@@ -63,10 +71,12 @@ export function AddTransaction() {
     existing?.medium ?? defaultMedium(account),
   )
   const [cardId, setCardId] = useState<string | undefined>(existing?.cardId)
+  const [toAccountId, setToAccountId] = useState<string | undefined>(existing?.toAccountId)
 
   // Las tarjetas que abren la cuenta elegida. En una de crédito es una sola —
   // la suya— y no hay nada que elegir; en un banco pueden ser varias.
   const tarjetas = cardsForAccount(accountId).filter((c) => c.kind === 'debit')
+  const destino = accounts.find((a) => a.id === toAccountId)
 
   // La devolución usa las categorías de gasto: resta de ese gasto, no es un ingreso.
   const cats = useMemo(
@@ -100,6 +110,9 @@ export function AddTransaction() {
     // La tarjeta de la cuenta anterior no abre esta: se cae con el cambio. En
     // una de crédito la tarjeta es la suya y no hay nada que elegir.
     setCardId(a.kind === 'credit' ? cardsForAccount(a.id)[0]?.id : undefined)
+    // Si el nuevo origen era el destino, la transferencia se volvería sobre sí
+    // misma: se suelta el destino y el usuario elige de nuevo.
+    if (a.id === toAccountId) setToAccountId(undefined)
   }
 
   /**
@@ -122,8 +135,12 @@ export function AddTransaction() {
       toast.error('Ingresa un monto válido')
       return
     }
-    if (!categoryId) {
+    if (!esTransferencia && !categoryId) {
       toast.error('Elige una categoría')
+      return
+    }
+    if (esTransferencia && !toAccountId) {
+      toast.error('Elige a qué cuenta va')
       return
     }
 
@@ -131,7 +148,10 @@ export function AddTransaction() {
       amountCents: cents,
       nature,
       accountId,
-      categoryId,
+      // El store normaliza igual, pero mandar la categoría de un gasto pegada a
+      // una transferencia sería confiar en que el de abajo la limpie.
+      categoryId: esTransferencia ? undefined : categoryId,
+      toAccountId: esTransferencia ? toAccountId : undefined,
       medium: account?.kind === 'cash' ? undefined : medium,
       cardId,
       date,
@@ -176,12 +196,12 @@ export function AddTransaction() {
           />
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          {NATURES.find((n) => n.id === nature)?.label}
+          {esTransferencia ? 'Transferencia' : NATURES.find((n) => n.id === nature)?.label}
         </p>
       </div>
 
-      <div className="mb-5 grid grid-cols-3 gap-2">
-        {NATURES.map((n) => (
+      <div className="mb-2 grid grid-cols-3 gap-2">
+        {NATURES.filter((n) => n.id !== 'transfer').map((n) => (
           <button
             key={n.id}
             onClick={() => {
@@ -197,7 +217,20 @@ export function AddTransaction() {
         ))}
       </div>
 
-      <div className="mb-5 grid grid-cols-4 gap-3">
+      <button
+        onClick={() => {
+          setNature('transfer')
+          setCategoryId('')
+        }}
+        className={`mb-5 flex items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-medium transition ${
+          esTransferencia ? TRANSFER_ACTIVE : 'border-border text-muted-foreground'
+        }`}
+      >
+        <ArrowLeftRight size={16} />
+        Transferencia
+      </button>
+
+      <div className={`mb-5 grid grid-cols-4 gap-3 ${esTransferencia ? 'hidden' : ''}`}>
         {cats.map((c) => (
           <button
             key={c.id}
@@ -213,7 +246,9 @@ export function AddTransaction() {
       </div>
 
       <div className="mb-5 flex flex-col gap-2.5">
-        <span className="text-xs font-medium text-muted-foreground">Cuenta o tarjeta</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {esTransferencia ? 'Sale de' : 'Cuenta o tarjeta'}
+        </span>
         <div className="flex flex-wrap gap-2">
           {accounts.map((a) => {
             const Icon = ACCOUNT_ICON[a.kind]
@@ -234,10 +269,43 @@ export function AddTransaction() {
           })}
         </div>
 
+        {esTransferencia && (
+          <>
+            <span className="mt-1 text-xs font-medium text-muted-foreground">Entra a</span>
+            <div className="flex flex-wrap gap-2">
+              {/* La cuenta de origen no está: mover plata a sí misma no es nada. */}
+              {accounts
+                .filter((a) => a.id !== accountId)
+                .map((a) => {
+                  const Icon = ACCOUNT_ICON[a.kind]
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => setToAccountId(a.id)}
+                      className={`flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition ${
+                        toAccountId === a.id
+                          ? 'border-sky-500 bg-sky-50 text-sky-700'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      <Icon size={15} />
+                      {a.name}
+                    </button>
+                  )
+                })}
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {destino?.kind === 'credit'
+                ? 'Baja tu deuda con esa tarjeta. No cuenta como gasto: lo que compraste ya se contó el día que lo compraste.'
+                : 'No es gasto ni ingreso: la plata sigue siendo tuya, solo cambia de lugar. No toca tu presupuesto.'}
+            </p>
+          </>
+        )}
+
         {/* En una tarjeta de crédito no hay medio que elegir —fue con la tarjeta—
             y el gasto no sale de una cuenta: sube la deuda. Vale decirlo acá, que
             es donde el usuario está por confirmarlo. */}
-        {account?.kind === 'credit' && (
+        {account?.kind === 'credit' && !esTransferencia && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             {nature === 'expense'
               ? 'Cuenta como gasto hoy, con su categoría, y suma a tu deuda. Pagar la tarjeta después no vuelve a contarlo.'

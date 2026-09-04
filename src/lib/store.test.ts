@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { monthKey } from '@/lib/format'
+import { formatMoney, monthKey } from '@/lib/format'
 import {
   accountBalanceCents,
   accountDebtCents,
@@ -23,9 +23,11 @@ import {
   monthlyBudgetStatus,
   replaceData,
   setMonthStartDay,
+  signedCentsFor,
   totalDebtCents,
   totalInAccounts,
   transactionsByMonth,
+  updateTransaction,
   updateWallet,
   walletFor,
 } from '@/lib/store'
@@ -391,6 +393,15 @@ describe('deuda de tarjeta de crédito', () => {
     expect(totalDebtCents().reliable).toBe(false)
   })
 
+  it('una tarjeta pagada al día debe cero, no «menos cero»', () => {
+    sembrarCalibradas()
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addAdjustment(visa.accountId, 0)
+    // `Object.is(-0, 0)` es false y `formatMoney(-0)` sale con signo menos.
+    expect(Object.is(accountDebtCents(visa.accountId), 0)).toBe(true)
+    expect(formatMoney(accountDebtCents(visa.accountId))).not.toMatch(/[-−]/)
+  })
+
   it('la deuda se lee en positivo, y un pago de más queda como saldo a favor', () => {
     sembrarCalibradas()
     const visa = addCreditCard({ name: 'Visa BCP' })
@@ -589,5 +600,137 @@ describe('cuenta preseleccionada al registrar', () => {
     sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
     addAdjustment('a_bcp', 100000)
     expect(lastUsedAccountId()).toBeUndefined()
+  })
+})
+
+/* ---------- transferencias (ADR 0004, D7) ---------- */
+
+describe('transferencias', () => {
+  /** BCP en 2,400 y Efectivo en 180, las dos calibradas. */
+  function sembrarDosCuentas() {
+    sembrar({
+      accounts: [
+        { id: 'a_bcp', name: 'BCP', kind: 'bank' },
+        { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+      ],
+      transactions: [],
+    })
+    addAdjustment('a_bcp', 240000, '2026-09-01')
+    addAdjustment('a_cash', 18000, '2026-09-01')
+  }
+
+  const retiro = {
+    amountCents: 20000,
+    nature: 'transfer' as const,
+    accountId: 'a_bcp',
+    toAccountId: 'a_cash',
+    date: '2026-09-02',
+  }
+
+  it('mueve el mismo monto de una cuenta a la otra', () => {
+    sembrarDosCuentas()
+    addTransaction(retiro)
+
+    expect(accountBalanceCents('a_bcp')).toBe(220000)
+    expect(accountBalanceCents('a_cash')).toBe(38000)
+  })
+
+  it('no cambia cuánta plata tenés: solo dónde está', () => {
+    sembrarDosCuentas()
+    const antes = totalInAccounts().totalCents
+    addTransaction(retiro)
+    expect(totalInAccounts().totalCents).toBe(antes)
+  })
+
+  it('no es gasto ni ingreso: el mes no se entera', () => {
+    sembrarDosCuentas()
+    addTransaction(retiro)
+    expect(monthTotals('2026-09')).toEqual({ income: 0, expense: 0, balance: 0 })
+    expect(expenseByCategory('2026-09')).toEqual([])
+  })
+
+  it('pagar la tarjeta baja la deuda sin volver a contar el gasto', () => {
+    sembrarDosCuentas()
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addAdjustment(visa.accountId, 0) // calibrada en cero: no debe nada
+    addTransaction({
+      amountCents: 30000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-09-03',
+    })
+    expect(accountDebtCents(visa.accountId)).toBe(30000)
+    const gastoTrasComprar = monthTotals('2026-09').expense
+
+    addTransaction({
+      amountCents: 30000,
+      nature: 'transfer',
+      accountId: 'a_bcp',
+      toAccountId: visa.accountId,
+      date: '2026-09-20',
+    })
+
+    expect(accountDebtCents(visa.accountId)).toBe(0)
+    expect(accountBalanceCents('a_bcp')).toBe(210000)
+    // Lo importante: el gasto del mes NO se duplicó al pagar.
+    expect(monthTotals('2026-09').expense).toBe(gastoTrasComprar)
+  })
+
+  it('el destino cuenta como movimiento: no se puede borrar la cuenta que recibió', () => {
+    sembrarDosCuentas()
+    sembrar({
+      accounts: [
+        { id: 'a_bcp', name: 'BCP', kind: 'bank' },
+        { id: 'a_cash', name: 'Efectivo', kind: 'cash' },
+      ],
+      transactions: [{ id: 'tr', ...retiro }],
+    })
+    expect(deleteAccount('a_cash')).toBe('has-transactions')
+  })
+
+  it('una transferencia a su propia cuenta pierde el destino: no sería nada', () => {
+    sembrarDosCuentas()
+    addTransaction({ ...retiro, toAccountId: 'a_bcp' })
+    expect(getData().transactions[0].toAccountId).toBeUndefined()
+  })
+
+  it('cambiarle la naturaleza suelta el destino, para que no sume a una cuenta ajena', () => {
+    sembrarDosCuentas()
+    addTransaction(retiro)
+    const id = getData().transactions[0].id
+
+    updateTransaction(id, { nature: 'expense', categoryId: 'c_food' })
+
+    expect(getData().transactions[0].toAccountId).toBeUndefined()
+    // Y el Efectivo vuelve a lo que era: ya no recibe nada.
+    expect(accountBalanceCents('a_cash')).toBe(18000)
+  })
+
+  it('signedCentsFor da el signo de cada punta y cero fuera de ellas', () => {
+    const tx = { id: 'tr', ...retiro }
+    expect(signedCentsFor(tx, 'a_bcp')).toBe(-20000)
+    expect(signedCentsFor(tx, 'a_cash')).toBe(20000)
+    expect(signedCentsFor(tx, 'a_otra')).toBe(0)
+  })
+
+  it('pagar la tarjeta no la deja preseleccionada para el próximo gasto', () => {
+    sembrarDosCuentas()
+    addTransaction({
+      amountCents: 4500,
+      nature: 'expense',
+      accountId: 'a_bcp',
+      categoryId: 'c_food',
+      date: '2026-09-02',
+    })
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addTransaction({
+      amountCents: 30000,
+      nature: 'transfer',
+      accountId: 'a_bcp',
+      toAccountId: visa.accountId,
+      date: '2026-09-20',
+    })
+    expect(lastUsedAccountId()).toBe('a_bcp')
   })
 })

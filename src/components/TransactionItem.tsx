@@ -1,4 +1,4 @@
-import { Scale, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Scale, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/CategoryIcon'
@@ -31,6 +31,7 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
   const cat = tx.categoryId ? getCategory(tx.categoryId) : undefined
   const esAjuste = tx.nature === 'adjustment'
   const esDevolucion = tx.nature === 'refund'
+  const esTransferencia = tx.nature === 'transfer'
 
   // Un ajuste no se edita como gasto: se corrige donde vive el saldo.
   const abrir = () => navigate(esAjuste ? '/cuentas' : `/registrar/${tx.id}`)
@@ -47,7 +48,7 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
   const tono =
     tx.nature === 'income'
       ? 'text-emerald-600'
-      : esAjuste
+      : esAjuste || esTransferencia
         ? 'text-muted-foreground'
         : 'text-foreground'
 
@@ -59,7 +60,14 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
    */
   const cuenta = getAccount(tx.accountId)
   const medio = tx.medium ? MEDIOS[tx.medium] : cuenta?.kind === 'cash' ? 'Efectivo' : null
-  const detalle = esAjuste ? [cuenta?.name, tx.note] : [tx.note, medio]
+  const destino = tx.toAccountId ? getAccount(tx.toAccountId) : undefined
+  // En una transferencia lo que importa es el recorrido, no el medio: de dónde
+  // salió y a dónde entró es lo único que explica por qué se movieron dos saldos.
+  const detalle = esAjuste
+    ? [cuenta?.name, tx.note]
+    : esTransferencia
+      ? [`${cuenta?.name ?? '—'} → ${destino?.name ?? '—'}`, tx.note]
+      : [tx.note, medio]
 
   return (
     <div className="flex items-center gap-3 pr-3">
@@ -67,16 +75,20 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
         onClick={abrir}
         className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 text-left active:bg-muted/50"
       >
-        {esAjuste ? (
+        {esAjuste || esTransferencia ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <Scale size={16} />
+            {esAjuste ? <Scale size={16} /> : <ArrowLeftRight size={16} />}
           </span>
         ) : (
           cat && <CategoryIcon category={cat} size="sm" />
         )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">
-            {esAjuste ? 'Ajuste de saldo' : (cat?.name ?? 'Sin categoría')}
+            {esAjuste
+              ? 'Ajuste de saldo'
+              : esTransferencia
+                ? 'Transferencia'
+                : (cat?.name ?? 'Sin categoría')}
           </span>
           <span className="block truncate text-xs text-muted-foreground">
             {esDevolucion && (
@@ -92,7 +104,7 @@ export function TransactionItem({ tx }: { tx: Transaction }) {
             className={`text-sm font-semibold tabular-nums ${tono}`}
             style={esDevolucion ? { color: DEVOLUCION } : undefined}
           >
-            {monto < 0 ? '−' : '+'}
+            {esTransferencia ? '' : monto < 0 ? '−' : '+'}
             {formatMoney(Math.abs(monto))}
           </span>
           <span className="text-[11px] tabular-nums text-muted-foreground">

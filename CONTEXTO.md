@@ -132,7 +132,7 @@ que guardaban céntimos sin decirlo en el nombre.
 ```ts
 type AccountKind = 'bank' | 'cash' | 'credit'
 type Medium = 'yape' | 'plin' | 'card' | 'transfer' | 'other'
-type TxNature = 'expense' | 'income' | 'refund' | 'adjustment'
+type TxNature = 'expense' | 'income' | 'refund' | 'adjustment' | 'transfer'
 type CategoryKind = 'expense' | 'income'
 type CardKind = 'debit' | 'credit'
 type CardBrand = 'visa' | 'mastercard' | 'amex' | 'diners'
@@ -190,8 +190,9 @@ interface Transaction {
   id: string
   amountCents: number  // > 0 salvo adjustment, que lleva un delta con signo
   nature: TxNature
-  accountId: string
-  categoryId?: string  // obligatorio salvo en adjustment
+  accountId: string    // de dónde sale; en transfer, el origen
+  toAccountId?: string // SOLO en transfer: la cuenta que recibe, nunca la misma
+  categoryId?: string  // obligatorio salvo en adjustment y transfer
   medium?: Medium      // nunca en cuentas cash
   cardId?: string      // con qué tarjeta; es una etiqueta, no mueve el saldo
   date: string         // YYYY-MM-DD
@@ -438,13 +439,14 @@ es la paleta sino la codificación secundaria (icono + nombre + monto siempre pr
       y su ciclo, y Yape/Plin con la cuenta de origen declarada (ADR 0004)
 - [x] La deuda de tarjeta se lleva aparte y NUNCA suma a «En cuentas»; un gasto
       con tarjeta de crédito cuenta el día de la compra, con su categoría
+- [x] Transferencias entre cuentas propias (`nature: 'transfer'`, el F1c que el
+      ADR 0001 dejó debiendo): pagar la tarjeta, retirar del cajero, pasar de un
+      banco a otro. No son gasto ni ingreso y no tocan el presupuesto
 
 ### Pendiente / ideas
 
-Los bloques 2 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
+Los bloques 3 a 6 del ADR 0004, en orden y cada uno mergeable por sí solo:
 
-- **Transferencias** (`nature: 'transfer'`, el F1c del ADR 0001): pagar la
-  tarjeta y el retiro de cajero, que hoy no tienen forma honesta de registrarse.
 - **Tarjeta viva**: facturado vs. consumo en curso a partir de `closingDay`
   (recortando el día al último del mes), «por pagar y cuándo», conciliación
   contra el estado de cuenta real y flujo Pagar.

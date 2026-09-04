@@ -11,8 +11,12 @@ export type Medium = 'yape' | 'plin' | 'card' | 'transfer' | 'other'
 /**
  * Qué significa el movimiento, que no es lo mismo que su dirección:
  * "todo dinero recibido es una entrada, pero no toda entrada es un ingreso".
+ *
+ * `transfer` es el único que toca DOS cuentas: sale de una y entra a otra, sin
+ * ser gasto ni ingreso. Es lo que son el retiro de cajero, el pase entre bancos
+ * y el pago de una tarjeta de crédito (ADR 0004, D7).
  */
-export type TxNature = 'expense' | 'income' | 'refund' | 'adjustment'
+export type TxNature = 'expense' | 'income' | 'refund' | 'adjustment' | 'transfer'
 
 /** Las categorías siguen partidas en gasto/ingreso: una devolución usa las de gasto. */
 export type CategoryKind = 'expense' | 'income'
@@ -101,8 +105,14 @@ export interface Transaction {
   /** Céntimos enteros. Siempre > 0 salvo en `adjustment`, que lleva un delta con signo. */
   amountCents: number
   nature: TxNature
+  /** De dónde sale. En una transferencia, la cuenta de origen. */
   accountId: string
-  /** Requerido salvo en `adjustment`, que no pertenece a ninguna categoría. */
+  /**
+   * Solo en `transfer`: la cuenta que recibe. Nunca igual a `accountId` —
+   * mover plata a la misma cuenta no es nada.
+   */
+  toAccountId?: string
+  /** Requerido salvo en `adjustment` y `transfer`, que no tienen categoría. */
   categoryId?: string
   /** Nunca en cuentas `cash`: el efectivo no se mueve por un canal. */
   medium?: Medium

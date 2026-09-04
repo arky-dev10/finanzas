@@ -155,11 +155,26 @@ export function getTransaction(id: string): Transaction | undefined {
 
 /* ---------- movimientos ---------- */
 
-/** El efectivo no se mueve por un canal: el medio no aplica en cuentas `cash`. */
-function stripMediumOnCash(tx: Transaction): Transaction {
-  if (tx.medium === undefined || getAccount(tx.accountId)?.kind !== 'cash') return tx
+/**
+ * Deja el movimiento en una forma que el modelo admita, antes de guardarlo.
+ *
+ * - El efectivo no se mueve por un canal: el medio no aplica en cuentas `cash`.
+ * - Una transferencia no tiene categoría (no es gasto ni ingreso) y no puede
+ *   ir a su propia cuenta. Y solo una transferencia lleva destino: si el
+ *   usuario cambia la naturaleza al editar, el destino viejo queda colgado y
+ *   sumaría plata a una cuenta que ya no tiene nada que ver.
+ */
+function normalize(tx: Transaction): Transaction {
   const limpio = { ...tx }
-  delete limpio.medium
+  if (limpio.medium !== undefined && getAccount(limpio.accountId)?.kind === 'cash') {
+    delete limpio.medium
+  }
+  if (limpio.nature === 'transfer') {
+    delete limpio.categoryId
+    if (limpio.toAccountId === limpio.accountId) delete limpio.toAccountId
+  } else {
+    delete limpio.toAccountId
+  }
   return limpio
 }
 
@@ -170,7 +185,7 @@ function rememberMedium(accounts: Account[], accountId: string, medium: Medium |
 }
 
 export function addTransaction(t: Omit<Transaction, 'id'>) {
-  const tx = stripMediumOnCash({ ...t, id: crypto.randomUUID() })
+  const tx = normalize({ ...t, id: crypto.randomUUID() })
   commit({
     ...data,
     accounts: rememberMedium(data.accounts, tx.accountId, tx.medium),
@@ -187,9 +202,10 @@ export function insertTransaction(tx: Transaction) {
 export function updateTransaction(id: string, patch: Partial<Omit<Transaction, 'id'>>) {
   const previo = data.transactions.find((t) => t.id === id)
   if (!previo) return
-  // Normalizamos sobre el resultado: el patch puede mover el movimiento a
-  // Efectivo, y ahí el medio que traía deja de tener sentido.
-  const tx = stripMediumOnCash({ ...previo, ...patch })
+  // Normalizamos sobre el RESULTADO, no sobre el patch: mover el movimiento a
+  // Efectivo deja sin sentido el medio que traía, y cambiarle la naturaleza a
+  // gasto deja sin sentido el destino.
+  const tx = normalize({ ...previo, ...patch })
   commit({
     ...data,
     accounts: rememberMedium(data.accounts, tx.accountId, tx.medium),
@@ -204,19 +220,30 @@ export function deleteTransaction(id: string) {
 /* ---------- cuentas ---------- */
 
 /**
- * Cuánto suma o resta un movimiento al saldo de su cuenta. Exportada porque
- * es también el signo con el que se muestra en la lista: una devolución entra,
- * un ajuste puede ir para cualquier lado.
+ * Cuánto suma o resta un movimiento al saldo de la cuenta DE LA QUE SALE.
+ * Exportada porque es también el signo con el que se muestra en la lista: una
+ * devolución entra, un ajuste puede ir para cualquier lado, una transferencia
+ * sale (de acá; a la otra cuenta entra, y de eso se encarga `signedCentsFor`).
  */
 export function signedCents(t: Transaction): number {
-  return t.nature === 'expense' ? -t.amountCents : t.amountCents
+  return t.nature === 'expense' || t.nature === 'transfer' ? -t.amountCents : t.amountCents
+}
+
+/**
+ * Cuánto le suma o le resta un movimiento a UNA cuenta concreta. Existe por la
+ * transferencia, el único movimiento que toca dos: resta en el origen y suma
+ * en el destino, con el mismo monto y en el mismo instante.
+ */
+export function signedCentsFor(t: Transaction, accountId: string): number {
+  if (t.nature === 'transfer' && t.toAccountId === accountId) return t.amountCents
+  return t.accountId === accountId ? signedCents(t) : 0
 }
 
 /** Saldo de la cuenta: todos sus movimientos, de todos los meses, ajustes incluidos. */
 export function accountBalanceCents(accountId: string): number {
   let total = 0
   for (const t of data.transactions) {
-    if (t.accountId === accountId) total += signedCents(t)
+    total += signedCentsFor(t, accountId)
   }
   return total
 }
@@ -246,12 +273,14 @@ export function totalInAccounts(): { totalCents: number; reliable: boolean } {
 
 /**
  * La cuenta del último movimiento REAL, para preseleccionarla al registrar
- * (D1 del ADR 0001). Los ajustes no cuentan como uso: calibrar un saldo no es
- * gastar ahí. Sin el filtro, ajustar la deuda de una tarjeta la dejaba de
- * default y el siguiente gasto se iba a crédito sin que nadie lo pidiera.
+ * (D1 del ADR 0001). Ni los ajustes ni las transferencias cuentan como uso:
+ * calibrar un saldo no es gastar ahí, y mover plata entre cuentas propias
+ * tampoco. Sin el filtro, ajustar la deuda de una tarjeta —o pagarla— la
+ * dejaba de default y el siguiente gasto se iba a crédito sin pedirlo.
  */
 export function lastUsedAccountId(): string | undefined {
-  return data.transactions.find((t) => t.nature !== 'adjustment')?.accountId
+  return data.transactions.find((t) => t.nature !== 'adjustment' && t.nature !== 'transfer')
+    ?.accountId
 }
 
 /* ---------- deuda ---------- */
@@ -262,7 +291,10 @@ export function lastUsedAccountId(): string | undefined {
  * es saldo a favor, y no se recorta a cero porque es plata que existe.
  */
 export function accountDebtCents(accountId: string): number {
-  return -accountBalanceCents(accountId)
+  const balance = accountBalanceCents(accountId)
+  // `-0` es un número distinto de `0` en JS y `Intl` lo formatea "−S/ 0.00":
+  // una tarjeta pagada al día se vería debiendo menos que nada.
+  return balance === 0 ? 0 : -balance
 }
 
 /** Deuda total: la suma de lo que se debe en todas las tarjetas de crédito. */
@@ -393,7 +425,12 @@ export type DeleteResult = 'ok' | 'not-found' | 'has-transactions' | 'last-accou
 export function deleteAccount(id: string): DeleteResult {
   const account = getAccount(id)
   if (account === undefined) return 'not-found'
-  if (data.transactions.some((t) => t.accountId === id)) return 'has-transactions'
+  // El destino de una transferencia también es un movimiento de esa cuenta:
+  // sin mirar `toAccountId`, borrar la cuenta que recibió haría desaparecer la
+  // otra mitad de la transferencia y el origen quedaría restando contra nada.
+  if (data.transactions.some((t) => t.accountId === id || t.toAccountId === id)) {
+    return 'has-transactions'
+  }
   if (account.kind !== 'credit' && spendableAccounts().length <= 1) return 'last-account'
 
   const huerfanas = new Set(cardsForAccount(id).map((c) => c.id))

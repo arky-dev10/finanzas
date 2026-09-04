@@ -96,7 +96,13 @@ export function seedAccounts(): Account[] {
 }
 
 const MEDIUMS: readonly string[] = ['yape', 'plin', 'card', 'transfer', 'other'] satisfies Medium[]
-const NATURES: readonly string[] = ['expense', 'income', 'refund', 'adjustment'] satisfies TxNature[]
+const NATURES: readonly string[] = [
+  'expense',
+  'income',
+  'refund',
+  'adjustment',
+  'transfer',
+] satisfies TxNature[]
 const KINDS: readonly string[] = ['bank', 'cash', 'credit'] satisfies Account['kind'][]
 const CARD_KINDS: readonly string[] = ['debit', 'credit'] satisfies CardKind[]
 const BRANDS: readonly string[] = ['visa', 'mastercard', 'amex', 'diners'] satisfies CardBrand[]
@@ -195,8 +201,19 @@ function isTransaction(v: unknown): v is Transaction {
   if (!Number.isInteger(t.amountCents)) return false
   // Solo un ajuste puede ser negativo: un gasto negativo sumaría al saldo.
   if (t.nature !== 'adjustment' && (t.amountCents as number) < 0) return false
-  // La categoría es obligatoria salvo en ajustes, que no pertenecen a ninguna.
-  if (t.nature === 'adjustment') {
+  /*
+   * La transferencia es el único movimiento con dos cuentas, y la segunda es
+   * obligatoria: sin destino la plata sale del origen y no llega a ningún
+   * lado. Y no puede ser la misma — mover plata a su propia cuenta no es nada.
+   */
+  if (t.nature === 'transfer') {
+    if (typeof t.toAccountId !== 'string' || t.toAccountId === t.accountId) return false
+  } else if (t.toAccountId !== undefined) {
+    return false
+  }
+  // La categoría es obligatoria salvo en ajustes y transferencias, que no
+  // pertenecen a ninguna: no son gasto ni ingreso.
+  if (t.nature === 'adjustment' || t.nature === 'transfer') {
     if (t.categoryId !== undefined && typeof t.categoryId !== 'string') return false
   } else if (typeof t.categoryId !== 'string') {
     return false
@@ -264,9 +281,10 @@ function looksMigrated(o: Record<string, unknown>): boolean {
  * y tirar todo el respaldo por eso sería desproporcionado.
  *
  * El medio no aplica en efectivo (la plata en mano no se mueve por un canal), y
- * un ajuste con categoría es peligroso además de incoherente: `deleteCategory`
- * borra los movimientos de la categoría, así que se llevaría puesta la
- * calibración y el saldo de la cuenta se movería solo.
+ * un ajuste o una transferencia con categoría es peligroso además de
+ * incoherente: `deleteCategory` borra los movimientos de la categoría, así que
+ * se llevaría puesta la calibración —o el pago de una tarjeta— y los saldos de
+ * las cuentas se moverían solos.
  */
 function normalizeTransactions(
   transactions: Transaction[],
@@ -277,7 +295,8 @@ function normalizeTransactions(
   const cardIds = new Set(cards.map((c) => c.id))
   return transactions.map((t) => {
     const sobraMedio = t.medium !== undefined && cash.has(t.accountId)
-    const sobraCategoria = t.nature === 'adjustment' && t.categoryId !== undefined
+    const sobraCategoria =
+      (t.nature === 'adjustment' || t.nature === 'transfer') && t.categoryId !== undefined
     // La tarjeta es una etiqueta: si no existe se cae la etiqueta, nunca el
     // movimiento. Un movimiento es plata; borrarlo movería un saldo real.
     const sobraTarjeta = t.cardId !== undefined && !cardIds.has(t.cardId)
