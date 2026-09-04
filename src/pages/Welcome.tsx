@@ -20,6 +20,14 @@ type Step = 'budget' | 'balances'
  */
 export function Welcome() {
   const { accounts, onboarded } = useData()
+  /*
+   * Solo cuentas del usuario. Hoy no puede haber tarjetas de crédito acá (esta
+   * pantalla vive antes del onboarding y `initial()` no siembra ninguna), pero
+   * la pregunta es «¿cuánto tienes?» y a una tarjeta habría que preguntarle
+   * cuánto DEBE: dejarlo dependiendo de lo que siembre otro módulo es confiar
+   * demasiado lejos.
+   */
+  const propias = accounts.filter((a) => a.kind !== 'credit')
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('budget')
   const [valor, setValor] = useState('')
@@ -35,7 +43,7 @@ export function Welcome() {
     completeOnboarding(valido ? monto : 0)
     // Solo calibra las cuentas donde el usuario tipeó algo; el resto queda
     // como la sembró el store (BCP pendiente, Efectivo en cero).
-    for (const a of accounts) {
+    for (const a of propias) {
       const raw = saldos[a.id]?.trim()
       if (!raw) continue
       const cents = parseAmountToCents(raw)
@@ -117,7 +125,7 @@ export function Welcome() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {accounts.map((a) => (
+            {propias.map((a) => (
               <div key={a.id} className="grid gap-1.5">
                 <label
                   htmlFor={`saldo-${a.id}`}
