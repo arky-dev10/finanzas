@@ -2,19 +2,31 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { monthKey } from '@/lib/format'
 import {
   accountBalanceCents,
+  accountDebtCents,
+  addAccount,
   addAdjustment,
+  addCreditCard,
+  addDebitCard,
   addTransaction,
+  addWallet,
   budgetStatus,
+  creditAvailableCents,
   currentMonthKey,
+  deleteAccount,
+  deleteCard,
   expenseByCategory,
   getAccount,
+  getCard,
   getData,
   monthTotals,
   monthlyBudgetStatus,
   replaceData,
   setMonthStartDay,
+  totalDebtCents,
   totalInAccounts,
   transactionsByMonth,
+  updateWallet,
+  walletFor,
 } from '@/lib/store'
 import type { Account, Category, Transaction } from '@/types'
 
@@ -41,6 +53,8 @@ const MOVIMIENTOS: Transaction[] = [
 function sembrar(patch: Partial<Parameters<typeof replaceData>[0]> = {}) {
   replaceData({
     accounts: CUENTAS,
+    cards: [],
+    wallets: [],
     categories: CATEGORIAS,
     transactions: MOVIMIENTOS,
     monthlyBudgetCents: 0,
@@ -346,5 +360,208 @@ describe('presupuestos, en céntimos', () => {
     const [b] = budgetStatus('2026-08')
     expect(b.spentCents).toBe(6000)
     expect(b.over).toBe(true)
+  })
+})
+
+/* ---------- tarjetas, deuda y billeteras (ADR 0004) ---------- */
+
+/** Cuentas ya calibradas: sin `balancePending` los saldos entran a los totales. */
+function sembrarCalibradas() {
+  sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+  addAdjustment('a_bcp', 240000, '2026-08-01')
+}
+
+describe('deuda de tarjeta de crédito', () => {
+  it('la tarjeta de crédito NO suma a «En cuentas»: sería contar deuda como plata', () => {
+    sembrarCalibradas()
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addAdjustment(visa.accountId, -125000)
+
+    expect(totalInAccounts()).toEqual({ totalCents: 240000, reliable: true })
+    expect(totalDebtCents()).toEqual({ totalCents: 125000, reliable: true })
+  })
+
+  it('una tarjeta sin calibrar no ensucia «En cuentas», solo la deuda', () => {
+    sembrarCalibradas()
+    addCreditCard({ name: 'Amex' })
+
+    // Su saldo es desconocido, no cero — pero el desconocido es de la deuda.
+    expect(totalInAccounts()).toEqual({ totalCents: 240000, reliable: true })
+    expect(totalDebtCents().reliable).toBe(false)
+  })
+
+  it('la deuda se lee en positivo, y un pago de más queda como saldo a favor', () => {
+    sembrarCalibradas()
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addAdjustment(visa.accountId, -10000)
+    expect(accountDebtCents(visa.accountId)).toBe(10000)
+
+    // Pagaste 150 debiendo 100: el saldo a favor existe y no se recorta a cero.
+    addTransaction({
+      amountCents: 15000,
+      nature: 'income',
+      accountId: visa.accountId,
+      categoryId: 'c_salary',
+      date: '2026-08-10',
+    })
+    expect(accountDebtCents(visa.accountId)).toBe(-5000)
+  })
+
+  it('el disponible de línea es lo que queda del crédito del banco, no plata del usuario', () => {
+    sembrarCalibradas()
+    const visa = addCreditCard({ name: 'Visa BCP', creditLimitCents: 600000 })
+    addAdjustment(visa.accountId, -125000)
+
+    expect(creditAvailableCents(visa.accountId)).toBe(475000)
+    // Y en ningún caso se filtró al dinero del usuario.
+    expect(totalInAccounts().totalCents).toBe(240000)
+  })
+
+  it('sin línea cargada no inventa un disponible', () => {
+    sembrarCalibradas()
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    expect(creditAvailableCents(visa.accountId)).toBeNull()
+    expect(creditAvailableCents('a_bcp')).toBeNull()
+  })
+})
+
+describe('crear y borrar cuentas', () => {
+  it('una cuenta nueva nace pendiente de calibrar, no en cero', () => {
+    sembrarCalibradas()
+    const interbank = addAccount({ name: 'Interbank', kind: 'bank', issuer: 'Interbank' })
+
+    expect(getAccount(interbank.id)?.balancePending).toBe(true)
+    expect(totalInAccounts()).toEqual({ totalCents: 240000, reliable: false })
+  })
+
+  it('se niega a borrar una cuenta con movimientos: eso movería un saldo real', () => {
+    expect(deleteAccount('a_bcp')).toBe('has-transactions')
+    expect(getAccount('a_bcp')).toBeDefined()
+  })
+
+  it('se niega a borrar la última cuenta gastable: no quedaría dónde registrar', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    expect(deleteAccount('a_bcp')).toBe('last-account')
+  })
+
+  it('la tarjeta de crédito no cuenta como cuenta gastable para esa regla', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    // Borrarla deja al usuario sin tarjetas pero con su cuenta: es válido.
+    expect(deleteAccount(visa.accountId)).toBe('ok')
+    expect(deleteAccount('a_bcp')).toBe('last-account')
+  })
+
+  it('al borrar la cuenta se lleva sus tarjetas y billeteras', () => {
+    sembrar({ accounts: [{ id: 'a_bcp', name: 'BCP', kind: 'bank' }], transactions: [] })
+    const otra = addAccount({ name: 'Interbank', kind: 'bank' })
+    const debito = addDebitCard({ name: 'Visa Débito', accountId: otra.id })!
+    addWallet({ name: 'Yape', provider: 'yape', accountId: otra.id, cardId: debito.id })
+
+    expect(deleteAccount(otra.id)).toBe('ok')
+    expect(getData().cards).toHaveLength(0)
+    expect(getData().wallets).toHaveLength(0)
+  })
+})
+
+describe('tarjetas', () => {
+  it('la de débito solo cuelga de una cuenta bancaria', () => {
+    sembrar({ transactions: [] })
+    expect(addDebitCard({ name: 'Débito', accountId: 'a_cash' })).toBeNull()
+    expect(addDebitCard({ name: 'Débito', accountId: 'no-existe' })).toBeNull()
+    expect(addDebitCard({ name: 'Visa Débito', accountId: 'a_bcp' })).not.toBeNull()
+  })
+
+  it('la de crédito nace junto a su cuenta de deuda, y se borran juntas', () => {
+    sembrar({ transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP', closingDay: 5, dueDay: 22 })
+
+    const cuenta = getAccount(visa.accountId)
+    expect(cuenta?.kind).toBe('credit')
+    expect(cuenta?.closingDay).toBe(5)
+    expect(cuenta?.dueDay).toBe(22)
+
+    expect(deleteCard(visa.id)).toBe('ok')
+    expect(getAccount(visa.accountId)).toBeUndefined()
+  })
+
+  it('borrar la de crédito hereda la regla de la cuenta: no se va con movimientos encima', () => {
+    sembrar({ transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    addTransaction({
+      amountCents: 30000,
+      nature: 'expense',
+      accountId: visa.accountId,
+      categoryId: 'c_food',
+      date: '2026-08-03',
+    })
+    expect(deleteCard(visa.id)).toBe('has-transactions')
+    expect(getCard(visa.id)).toBeDefined()
+  })
+
+  it('borrar la de débito tira la etiqueta, nunca el movimiento', () => {
+    sembrar({ transactions: [] })
+    const debito = addDebitCard({ name: 'Visa Débito', accountId: 'a_bcp' })!
+    addTransaction({
+      amountCents: 4000,
+      nature: 'expense',
+      accountId: 'a_bcp',
+      categoryId: 'c_food',
+      cardId: debito.id,
+      date: '2026-08-03',
+    })
+
+    expect(deleteCard(debito.id)).toBe('ok')
+    const [tx] = getData().transactions
+    expect(tx.amountCents).toBe(4000)
+    expect(tx.cardId).toBeUndefined()
+  })
+
+  it('guarda solo los últimos cuatro dígitos y descarta lo que no lo sea', () => {
+    sembrar({ transactions: [] })
+    expect(addDebitCard({ name: 'A', accountId: 'a_bcp', last4: '4111 1111 1111 4821' })?.last4).toBe('4821')
+    expect(addDebitCard({ name: 'B', accountId: 'a_bcp', last4: '12' })?.last4).toBeUndefined()
+  })
+})
+
+describe('billeteras Yape / Plin', () => {
+  it('la cuenta se deriva de la tarjeta: no pueden decir cosas distintas', () => {
+    sembrar({ transactions: [] })
+    const otra = addAccount({ name: 'Interbank', kind: 'bank' })
+    const debito = addDebitCard({ name: 'Débito Interbank', accountId: otra.id })!
+
+    // Le pasamos una cuenta que NO es la de la tarjeta: manda la tarjeta.
+    const yape = addWallet({ name: 'Yape', provider: 'yape', accountId: 'a_bcp', cardId: debito.id })
+    expect(yape?.accountId).toBe(otra.id)
+  })
+
+  it('funciona sin tarjeta: para tener Yape no hace falta registrar un plástico', () => {
+    sembrar({ transactions: [] })
+    const yape = addWallet({ name: 'Yape', provider: 'yape', accountId: 'a_bcp' })
+    expect(yape?.accountId).toBe('a_bcp')
+    expect(yape?.cardId).toBeUndefined()
+  })
+
+  it('rechaza orígenes que no son una cuenta bancaria', () => {
+    sembrar({ transactions: [] })
+    const visa = addCreditCard({ name: 'Visa BCP' })
+    expect(addWallet({ name: 'Yape', provider: 'yape', accountId: 'a_cash' })).toBeNull()
+    expect(addWallet({ name: 'Yape', provider: 'yape', accountId: visa.accountId })).toBeNull()
+    expect(addWallet({ name: 'Yape', provider: 'yape', accountId: 'a_bcp', cardId: visa.id })).toBeNull()
+  })
+
+  it('al mover la billetera de tarjeta, la cuenta la sigue', () => {
+    sembrar({ transactions: [] })
+    const otra = addAccount({ name: 'Interbank', kind: 'bank' })
+    const deOtra = addDebitCard({ name: 'Débito Interbank', accountId: otra.id })!
+    const yape = addWallet({ name: 'Yape', provider: 'yape', accountId: 'a_bcp' })!
+
+    expect(updateWallet(yape.id, { cardId: deOtra.id })).toBe('ok')
+    expect(walletFor('yape')?.accountId).toBe(otra.id)
+  })
+
+  it('walletFor no adivina cuando el usuario no declaró su Yape', () => {
+    sembrar({ transactions: [] })
+    expect(walletFor('yape')).toBeUndefined()
   })
 })

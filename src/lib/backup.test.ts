@@ -236,12 +236,94 @@ describe('respaldo exportado', () => {
   it('sale en la versión actual y con las cuentas', () => {
     const b = toBackup(parseData(v2)!)
     expect(b.version).toBe(BACKUP_VERSION)
-    expect(BACKUP_VERSION).toBe(4)
+    expect(BACKUP_VERSION).toBe(5)
     expect(b.monthlyBudgetCents).toBe(350000)
     expect(b.accounts).toHaveLength(2)
   })
 
   it('se llama por la marca, no por el nombre viejo del repo', () => {
     expect(backupFilename(new Date(2026, 7, 31))).toBe('kumi-2026-08-31.json')
+  })
+})
+
+/* ---------- v5: tarjetas, billeteras y cuentas de crédito (ADR 0004) ---------- */
+
+/** Respaldo v5 completo, con los tres objetos nuevos apuntándose entre sí. */
+const v5 = {
+  version: 5,
+  exportedAt: '2026-09-04T00:00:00.000Z',
+  monthlyBudgetCents: 0,
+  monthStartDay: 1,
+  accounts: [
+    { id: 'a_bcp', name: 'BCP', kind: 'bank', issuer: 'BCP' },
+    {
+      id: 'a_visa',
+      name: 'Visa BCP',
+      kind: 'credit',
+      issuer: 'BCP',
+      creditLimitCents: 600000,
+      closingDay: 30,
+      dueDay: 22,
+    },
+  ],
+  cards: [
+    { id: 'k_deb', name: 'Visa Débito', kind: 'debit', accountId: 'a_bcp', brand: 'visa', last4: '4821' },
+    { id: 'k_cred', name: 'Visa BCP', kind: 'credit', accountId: 'a_visa', brand: 'visa' },
+  ],
+  wallets: [{ id: 'w_yape', name: 'Yape', provider: 'yape', accountId: 'a_bcp', cardId: 'k_deb' }],
+  categories: [{ id: 'c_food', name: 'Comida', icon: 'utensils', color: '#eb6834', type: 'expense' }],
+  transactions: [
+    { id: 't1', amountCents: 30000, nature: 'expense', accountId: 'a_visa', categoryId: 'c_food', date: '2026-09-03', cardId: 'k_cred' },
+  ],
+}
+
+describe('parseData — v5', () => {
+  it('conserva la cuenta de crédito con su línea y su ciclo', () => {
+    const a = parseData(v5)!.accounts.find((x) => x.id === 'a_visa')!
+    expect(a.kind).toBe('credit')
+    expect(a.creditLimitCents).toBe(600000)
+    // El día del banco se guarda tal cual: hay tarjetas que cierran el 30.
+    expect(a.closingDay).toBe(30)
+    expect(a.dueDay).toBe(22)
+  })
+
+  it('un respaldo anterior a las tarjetas se lee como "todavía no cargaste ninguna"', () => {
+    const d = parseData(v2)!
+    expect(d.cards).toEqual([])
+    expect(d.wallets).toEqual([])
+  })
+
+  it('el respaldo exportado se las lleva de vuelta', () => {
+    const b = toBackup(parseData(v5)!)
+    expect(b.cards).toHaveLength(2)
+    expect(b.wallets).toHaveLength(1)
+  })
+
+  it('descarta la tarjeta que quedó sin cuenta, sin tirar el respaldo entero', () => {
+    const d = parseData({ ...v5, cards: [...v5.cards, { id: 'k_x', name: 'Fantasma', kind: 'debit', accountId: 'a_no' }] })!
+    expect(d.cards.map((c) => c.id)).toEqual(['k_deb', 'k_cred'])
+    expect(d.transactions).toHaveLength(1)
+  })
+
+  it('la billetera sobrevive a una tarjeta que no es de su cuenta; se cae la etiqueta', () => {
+    const wallets = [{ id: 'w_yape', name: 'Yape', provider: 'yape', accountId: 'a_bcp', cardId: 'k_cred' }]
+    const [w] = parseData({ ...v5, wallets })!.wallets
+    expect(w.accountId).toBe('a_bcp')
+    expect(w.cardId).toBeUndefined()
+  })
+
+  it('un movimiento con una tarjeta que ya no existe pierde la etiqueta, no la plata', () => {
+    const d = parseData({ ...v5, cards: [] })!
+    expect(d.transactions[0].amountCents).toBe(30000)
+    expect(d.transactions[0].cardId).toBeUndefined()
+  })
+
+  it('rechaza una cuenta con un tipo que el modelo no conoce', () => {
+    expect(parseData({ ...v5, accounts: [{ id: 'a_x', name: 'X', kind: 'crypto' }] })).toBe(null)
+  })
+
+  it('rechaza un día de cierre que ningún mes tiene', () => {
+    const accounts = [{ id: 'a_visa', name: 'Visa', kind: 'credit', closingDay: 32 }]
+    expect(parseData({ ...v5, accounts })).toBe(null)
   })
 })

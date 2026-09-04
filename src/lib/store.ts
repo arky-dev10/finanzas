@@ -1,7 +1,16 @@
 import { useSyncExternalStore } from 'react'
 import { monthKeyFor, shiftMonth, todayISO } from '@/lib/format'
 import { BACKUP_VERSION, parseData, seedAccounts, type Data } from '@/lib/backup'
-import type { Account, Category, Medium, Transaction } from '@/types'
+import type {
+  Account,
+  Card,
+  CardBrand,
+  Category,
+  Medium,
+  Transaction,
+  Wallet,
+  WalletProvider,
+} from '@/types'
 
 const KEY = 'finanzas-data-v1'
 
@@ -42,6 +51,8 @@ function load(): Data {
 function initial(): Data {
   return {
     accounts: seedAccounts(),
+    cards: [],
+    wallets: [],
     categories: DEFAULT_CATEGORIES,
     transactions: [],
     monthlyBudgetCents: 0,
@@ -115,6 +126,8 @@ export function replaceData(next: Data): Data {
   const previo = data
   commit({
     accounts: next.accounts,
+    cards: next.cards,
+    wallets: next.wallets,
     categories: next.categories,
     transactions: next.transactions,
     monthlyBudgetCents: next.monthlyBudgetCents,
@@ -130,6 +143,10 @@ export function getCategory(id: string): Category | undefined {
 
 export function getAccount(id: string): Account | undefined {
   return data.accounts.find((a) => a.id === id)
+}
+
+export function getCard(id: string): Card | undefined {
+  return data.cards.find((c) => c.id === id)
 }
 
 export function getTransaction(id: string): Transaction | undefined {
@@ -218,10 +235,47 @@ export function totalInAccounts(): { totalCents: number; reliable: boolean } {
   let totalCents = 0
   let reliable = true
   for (const a of data.accounts) {
+    // La tarjeta de crédito guarda deuda, no plata del usuario: sumarla acá
+    // haría que deber más se viera como tener más (ADR 0004, D1).
+    if (a.kind === 'credit') continue
     if (a.balancePending) reliable = false
     else totalCents += accountBalanceCents(a.id)
   }
   return { totalCents, reliable }
+}
+
+/* ---------- deuda ---------- */
+
+/**
+ * Lo que se debe en una tarjeta, en positivo: el saldo de su cuenta `credit`
+ * está en negativo por naturaleza. Puede dar negativo si pagaste de más — eso
+ * es saldo a favor, y no se recorta a cero porque es plata que existe.
+ */
+export function accountDebtCents(accountId: string): number {
+  return -accountBalanceCents(accountId)
+}
+
+/** Deuda total: la suma de lo que se debe en todas las tarjetas de crédito. */
+export function totalDebtCents(): { totalCents: number; reliable: boolean } {
+  let totalCents = 0
+  let reliable = true
+  for (const a of data.accounts) {
+    if (a.kind !== 'credit') continue
+    if (a.balancePending) reliable = false
+    else totalCents += accountDebtCents(a.id)
+  }
+  return { totalCents, reliable }
+}
+
+/**
+ * Cuánto queda libre de la línea. Es plata del banco, no del usuario: se
+ * muestra como dato de la tarjeta y jamás entra al Disponible (ADR 0004).
+ * `null` cuando no se cargó la línea: no la inventamos.
+ */
+export function creditAvailableCents(accountId: string): number | null {
+  const account = getAccount(accountId)
+  if (account?.kind !== 'credit' || account.creditLimitCents === undefined) return null
+  return account.creditLimitCents - accountDebtCents(accountId)
 }
 
 /**
@@ -253,6 +307,272 @@ export function addAdjustment(accountId: string, targetBalanceCents: number, dat
     accounts,
     transactions: delta === 0 ? data.transactions : [ajuste, ...data.transactions],
   })
+}
+
+/* ---------- cuentas, tarjetas y billeteras: crear, editar, borrar ---------- */
+
+/** Las cuentas con plata del usuario. Las `credit` guardan deuda y quedan fuera. */
+export function spendableAccounts(): Account[] {
+  return data.accounts.filter((a) => a.kind !== 'credit')
+}
+
+export function cardsForAccount(accountId: string): Card[] {
+  return data.cards.filter((c) => c.accountId === accountId)
+}
+
+/** El plástico solo se identifica por los últimos cuatro; el número entero nunca se guarda. */
+function cleanLast4(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined
+  const digits = raw.replace(/\D/g, '').slice(-4)
+  return digits.length === 4 ? digits : undefined
+}
+
+/** Descarta las claves en `undefined` para no dejarlas colgando en el JSON guardado. */
+function compact<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
+}
+
+/**
+ * Una cuenta nueva nace con el saldo pendiente de calibrar: nadie contó todavía
+ * lo que hay adentro, y cero sería una afirmación que la app no puede hacer.
+ *
+ * Las cuentas `credit` NO se crean acá: nacen junto a su tarjeta en
+ * `addCreditCard`, que es lo que garantiza que no exista una línea sin plástico.
+ */
+export function addAccount(input: {
+  name: string
+  kind: 'bank' | 'cash'
+  issuer?: string
+}): Account {
+  const account: Account = compact({
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    kind: input.kind,
+    balancePending: true,
+    issuer: input.issuer?.trim() || undefined,
+  })
+  commit({ ...data, accounts: [...data.accounts, account] })
+  return account
+}
+
+/**
+ * `kind` queda fuera del patch a propósito: pasar de banco a efectivo dejaría
+ * movimientos con un medio que ahí no aplica, y de/hacia `credit` rompería el
+ * 1:1 con la tarjeta. Si te equivocaste de tipo, la cuenta se borra y se rehace.
+ */
+export function updateAccount(id: string, patch: Partial<Omit<Account, 'id' | 'kind'>>) {
+  commit({
+    ...data,
+    accounts: data.accounts.map((a) => (a.id === id ? compact({ ...a, ...patch }) : a)),
+  })
+}
+
+export type DeleteResult = 'ok' | 'not-found' | 'has-transactions' | 'last-account'
+
+/**
+ * Borra la cuenta y todo lo que colgaba de ella (tarjetas, billeteras).
+ *
+ * Se niega si tiene movimientos, a diferencia de `deleteCategory`, que sí se
+ * lleva los suyos: un movimiento de una cuenta ES un saldo, y borrarlo en
+ * silencio movería plata que el usuario cree tener. Que la quite a mano o que
+ * la deje ahí; la app no decide eso por él.
+ *
+ * También se niega con la última cuenta gastable: sin ninguna no habría dónde
+ * registrar, y la pantalla de Registrar quedaría sin cuenta que ofrecer.
+ */
+export function deleteAccount(id: string): DeleteResult {
+  const account = getAccount(id)
+  if (account === undefined) return 'not-found'
+  if (data.transactions.some((t) => t.accountId === id)) return 'has-transactions'
+  if (account.kind !== 'credit' && spendableAccounts().length <= 1) return 'last-account'
+
+  const huerfanas = new Set(cardsForAccount(id).map((c) => c.id))
+  commit({
+    ...data,
+    accounts: data.accounts.filter((a) => a.id !== id),
+    cards: data.cards.filter((c) => c.accountId !== id),
+    wallets: data.wallets.filter((w) => w.accountId !== id).map((w) => dropCard(w, huerfanas)),
+  })
+  return 'ok'
+}
+
+/** La billetera sobrevive a su tarjeta: la cuenta es la verdad, la tarjeta la etiqueta. */
+function dropCard(w: Wallet, removed: Set<string>): Wallet {
+  if (w.cardId === undefined || !removed.has(w.cardId)) return w
+  const limpia = { ...w }
+  delete limpia.cardId
+  return limpia
+}
+
+/** Tarjeta de débito: una llave más para una cuenta que ya existe, sin saldo propio. */
+export function addDebitCard(input: {
+  name: string
+  accountId: string
+  brand?: CardBrand
+  last4?: string
+}): Card | null {
+  // Contra una cuenta `cash` no hay plástico, y contra una `credit` la tarjeta
+  // no sería de débito: en los dos casos el dato sería incoherente, no incompleto.
+  if (getAccount(input.accountId)?.kind !== 'bank') return null
+  const card: Card = compact({
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    kind: 'debit',
+    accountId: input.accountId,
+    brand: input.brand,
+    last4: cleanLast4(input.last4),
+  })
+  commit({ ...data, cards: [...data.cards, card] })
+  return card
+}
+
+/**
+ * Tarjeta de crédito: nace con su cuenta `credit`, donde vive la deuda. Los dos
+ * objetos se crean juntos y se borran juntos, así que nunca hay una línea sin
+ * plástico ni un plástico sin dónde acumular lo que se debe.
+ *
+ * Arranca pendiente de calibrar, igual que una cuenta: lo que se debe hoy lo
+ * dice el usuario, no lo adivina la app.
+ */
+export function addCreditCard(input: {
+  name: string
+  issuer?: string
+  brand?: CardBrand
+  last4?: string
+  creditLimitCents?: number
+  closingDay?: number
+  dueDay?: number
+}): Card {
+  const name = input.name.trim()
+  const account: Account = compact({
+    id: crypto.randomUUID(),
+    name,
+    kind: 'credit' as const,
+    balancePending: true as const,
+    issuer: input.issuer?.trim() || undefined,
+    creditLimitCents: input.creditLimitCents,
+    closingDay: input.closingDay,
+    dueDay: input.dueDay,
+  })
+  const card: Card = compact({
+    id: crypto.randomUUID(),
+    name,
+    kind: 'credit' as const,
+    accountId: account.id,
+    brand: input.brand,
+    last4: cleanLast4(input.last4),
+  })
+  commit({ ...data, accounts: [...data.accounts, account], cards: [...data.cards, card] })
+  return card
+}
+
+/**
+ * Solo la identidad de la tarjeta. Los hechos de plata de una de crédito
+ * (línea, cierre, vencimiento) viven en su cuenta y se editan con
+ * `updateAccount`: son de la línea, no del plástico.
+ */
+export function updateCard(id: string, patch: Partial<Omit<Card, 'id' | 'kind' | 'accountId'>>) {
+  const limpio = 'last4' in patch ? { ...patch, last4: cleanLast4(patch.last4) } : patch
+  commit({
+    ...data,
+    cards: data.cards.map((c) => (c.id === id ? compact({ ...c, ...limpio }) : c)),
+  })
+}
+
+/**
+ * Borrar una tarjeta de débito es tirar una etiqueta: los movimientos que la
+ * nombraban se quedan, sin ella. Borrar una de crédito es borrar su cuenta, así
+ * que hereda la regla de `deleteAccount` y se niega si tiene movimientos.
+ */
+export function deleteCard(id: string): DeleteResult {
+  const card = getCard(id)
+  if (card === undefined) return 'not-found'
+  if (card.kind === 'credit') return deleteAccount(card.accountId)
+
+  const removed = new Set([id])
+  commit({
+    ...data,
+    cards: data.cards.filter((c) => c.id !== id),
+    wallets: data.wallets.map((w) => dropCard(w, removed)),
+    transactions: data.transactions.map((t) => (t.cardId === id ? sinTarjeta(t) : t)),
+  })
+  return 'ok'
+}
+
+function sinTarjeta(t: Transaction): Transaction {
+  const limpio = { ...t }
+  delete limpio.cardId
+  return limpio
+}
+
+/**
+ * Yape/Plin con origen. Si viene tarjeta, la cuenta se DERIVA de ella en vez de
+ * confiar en las dos: guardadas por separado podrían terminar diciendo cosas
+ * distintas sobre de dónde sale la plata.
+ */
+function resolveWalletSource(
+  accountId: string,
+  cardId: string | undefined,
+): { accountId: string; cardId?: string } | null {
+  if (cardId === undefined) {
+    return getAccount(accountId)?.kind === 'bank' ? { accountId } : null
+  }
+  const card = getCard(cardId)
+  if (card === undefined || card.kind !== 'debit') return null
+  return { accountId: card.accountId, cardId }
+}
+
+export function addWallet(input: {
+  name: string
+  provider: WalletProvider
+  accountId: string
+  cardId?: string
+}): Wallet | null {
+  const source = resolveWalletSource(input.accountId, input.cardId)
+  if (source === null) return null
+  const wallet: Wallet = compact({
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    provider: input.provider,
+    ...source,
+  })
+  commit({ ...data, wallets: [...data.wallets, wallet] })
+  return wallet
+}
+
+export function updateWallet(
+  id: string,
+  patch: Partial<Omit<Wallet, 'id'>>,
+): 'ok' | 'not-found' | 'invalid-source' {
+  const previa = data.wallets.find((w) => w.id === id)
+  if (previa === undefined) return 'not-found'
+  const fundida = { ...previa, ...patch }
+  const source = resolveWalletSource(
+    fundida.accountId,
+    'cardId' in patch ? patch.cardId : previa.cardId,
+  )
+  if (source === null) return 'invalid-source'
+  const wallet: Wallet = compact({
+    id: previa.id,
+    name: fundida.name.trim(),
+    provider: fundida.provider,
+    ...source,
+  })
+  commit({ ...data, wallets: data.wallets.map((w) => (w.id === id ? wallet : w)) })
+  return 'ok'
+}
+
+export function deleteWallet(id: string) {
+  commit({ ...data, wallets: data.wallets.filter((w) => w.id !== id) })
+}
+
+/**
+ * De dónde sale la plata al elegir Yape (o Plin) en Registrar. Devuelve
+ * `undefined` si el usuario no lo declaró: ahí la pantalla deja la cuenta que
+ * ya estaba elegida en vez de adivinar por él.
+ */
+export function walletFor(provider: WalletProvider): Wallet | undefined {
+  return data.wallets.find((w) => w.provider === provider)
 }
 
 /* ---------- categorías ---------- */
