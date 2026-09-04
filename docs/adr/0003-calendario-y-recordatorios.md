@@ -46,3 +46,28 @@ desde la decisión D7 para cuando pudiera significar lo que promete.
   (teórico hasta que el backend se deploye).
 - La proyección introduce el primer número «hacia adelante» de la app; cuando lleguen
   tarjetas (F3) y recurrencias detectadas (F6), alimentan el mismo bloque.
+
+## Enmienda (2026-09-04, ADR 0004) — el Calendario también mira atrás
+
+La D1 fijaba una tríada temporal limpia: Historial = pasado, Resumen = presente,
+Calendario = futuro, y en la §Contexto, «no un calendario genérico, sino la pantalla del
+futuro». **La mitad del futuro se mantiene; la exclusividad se cae.**
+
+El usuario pidió registrar «mis pagos mensuales como luz, comida, pasajes». Eso obligó a
+separar dos cosas que la frase mezcla, y la separación sigue valiendo:
+
+- **Luz, internet, alquiler, Netflix, la cuota de la Visa** tienen fecha y monto. Son
+  compromisos: recordatorios, y viven en el Calendario.
+- **Comida y pasajes** no tienen fecha. Son ritmo y tope: **presupuesto por categoría**,
+  que ya existe desde antes. Ponerlos como recordatorio haría que la app avisara «pagá
+  comida el 15», que es falso.
+
+Pero un calendario que solo muestra compromisos queda **vacío 27 de 30 días**: tres
+recibos al mes no llenan una grilla, y una pantalla muerta no se abre. Así que la grilla
+del ciclo muestra las dos mitades: **los días ya pasados, cuánto se gastó** (con el color
+de la categoría); **los que vienen, lo que se debe**. Comida y pasajes sí aparecen —
+como rastro real de lo gastado, no como recordatorio inventado.
+
+Consecuencia: hay que distinguir visualmente pasado de futuro dentro de la misma grilla,
+o los dos se leen como lo mismo y el rastro pasa por compromiso. Historial no pierde su
+lugar: sigue siendo la lista, el detalle y los filtros; el Calendario da la forma del mes.
